@@ -20,6 +20,11 @@
   });
 
   function $(id) { return document.getElementById(id); }
+
+  /** Icone do sprite da pagina (os simbolos ficam em _lateral.php). */
+  function svg(nome) {
+    return '<svg class="icone" aria-hidden="true"><use href="#i-' + nome + '"/></svg>';
+  }
   function cor(canal) { return 'var(' + (cores[canal] || '--s5') + ')'; }
   function pct(v) { return umaCasa.format(v) + '%'; }
   function classe(v) { return v < 0 ? 'neg' : 'pos'; }
@@ -86,32 +91,32 @@
       : null;
 
     var itens = [
-      { ico: '◉', cor: 'var(--s2)', rotulo: 'Receita', valor: moeda.format(receita),
+      { ico: 'receita', cor: 'var(--s2)', rotulo: 'Receita', valor: moeda.format(receita),
         nota: inteiro.format(pedidos) + ' pedidos' },
     ];
 
     if (temMargem) {
       itens.push(
-        { ico: '▲', cor: 'var(--lucro)', rotulo: 'Margem de contribuição',
+        { ico: 'tendencia', cor: 'var(--lucro)', rotulo: 'Margem de contribuição',
           valor: moeda.format(margem), nota: 'após custo, comissão, frete e imposto' },
-        { ico: '%', cor: 'var(--atencao)', rotulo: 'Margem sobre a receita',
+        { ico: 'porcento', cor: 'var(--atencao)', rotulo: 'Margem sobre a receita',
           valor: pct(mPct), nota: 'média de todos os canais' },
       );
     }
 
-    itens.push({ ico: '◆', cor: 'var(--s4)', rotulo: 'Ticket médio',
+    itens.push({ ico: 'etiqueta', cor: 'var(--s4)', rotulo: 'Ticket médio',
       valor: moeda.format(ticket),
       nota: inteiro.format(d.cobertura.pedidos) + ' pedidos na análise' });
 
     if (melhor) {
-      itens.push({ ico: '★', cor: 'var(--marca-clara)', rotulo: 'Melhor canal por margem',
+      itens.push({ ico: 'trofeu', cor: 'var(--marca-clara)', rotulo: 'Melhor canal por margem',
         valor: melhor.canal, nota: pct(melhor.margemPct) + ' de margem' });
     }
 
     $('kpis').innerHTML = itens.map(function (k) {
       return '<div class="kpi">' +
         '<div class="kpi-ico" style="background:color-mix(in srgb,' + k.cor +
-          ' 16%,transparent);color:' + k.cor + '">' + k.ico + '</div>' +
+          ' 16%,transparent);color:' + k.cor + '">' + svg(k.ico) + '</div>' +
         '<div class="kpi-corpo">' +
           '<div class="kpi-rotulo">' + esc(k.rotulo) + '</div>' +
           '<div class="kpi-valor" title="' + esc(k.valor) + '">' + esc(k.valor) + '</div>' +
@@ -127,10 +132,10 @@
       $('insights').innerHTML = '<p class="vazio">Sem observações para este período.</p>';
       return;
     }
-    var ico = { oportunidade: '↑', alerta: '!', informacao: 'i' };
+    var ico = { oportunidade: 'seta-cima', alerta: 'exclamacao', informacao: 'info' };
     $('insights').innerHTML = lista.map(function (i) {
       return '<div class="insight">' +
-        '<div class="insight-ico insight-' + esc(i.tipo) + '">' + (ico[i.tipo] || 'i') + '</div>' +
+        '<div class="insight-ico insight-' + esc(i.tipo) + '">' + svg(ico[i.tipo] || 'info') + '</div>' +
         '<div><div class="insight-titulo">' + esc(i.titulo) + '</div>' +
         '<div class="insight-texto">' + esc(i.texto) + '</div></div></div>';
     }).join('');

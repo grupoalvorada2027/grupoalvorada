@@ -12,50 +12,15 @@ header('X-Robots-Tag: noindex, nofollow');
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#CF0C0C">
+<link rel="icon" href="logo.png">
 <title>Lucratividade por Canal</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
 
-<!-- ===================== LATERAL ===================== -->
-<nav class="lateral" aria-label="Navegação principal">
-  <div class="marca-topo">
-    <div class="marca-icone" aria-hidden="true">▣</div>
-    <div>
-      <div class="marca-nome">Grupo Alvorada</div>
-      <div class="marca-sub">BI · Bling</div>
-    </div>
-  </div>
-
-  <div class="menu-grupo">Vendas</div>
-  <a class="menu-item ativo" href="index.php">
-    <span class="ico" aria-hidden="true">◧</span> Lucratividade
-  </a>
-  <span class="menu-item desabilitado">
-    <span class="ico" aria-hidden="true">◫</span> Produtos <span class="menu-tag">em breve</span>
-  </span>
-  <span class="menu-item desabilitado">
-    <span class="ico" aria-hidden="true">◪</span> Tabela dinâmica <span class="menu-tag">em breve</span>
-  </span>
-
-  <div class="menu-grupo">Estoque</div>
-  <span class="menu-item desabilitado">
-    <span class="ico" aria-hidden="true">▤</span> Estoque <span class="menu-tag">em breve</span>
-  </span>
-
-  <div class="menu-grupo">Financeiro</div>
-  <span class="menu-item desabilitado">
-    <span class="ico" aria-hidden="true">▦</span> Fluxo de caixa <span class="menu-tag">em breve</span>
-  </span>
-
-  <div class="lateral-rodape">
-    <p>Dados do Bling, sincronizados automaticamente pelo servidor.</p>
-  </div>
-</nav>
+<?php $pagina = 'lucratividade'; require __DIR__ . '/_lateral.php'; ?>
 
 <!-- ===================== CONTEÚDO ===================== -->
 <div class="conteudo">
@@ -69,10 +34,10 @@ header('X-Robots-Tag: noindex, nofollow');
       <span class="selo-atualizacao" id="atualizacao"></span>
       <div class="usuario-bloco">
         <strong><?= htmlspecialchars($usuario['nome'], ENT_QUOTES) ?></strong>
-        <span><?= htmlspecialchars($usuario['papel'], ENT_QUOTES) ?></span>
+        <span><?= htmlspecialchars(PAPEIS[$usuario['papel']] ?? $usuario['papel'], ENT_QUOTES) ?></span>
       </div>
-      <button type="button" id="alternar-tema" class="btn-icone" aria-label="Alternar tema">◐</button>
-      <a href="sair.php" class="btn-icone" title="Sair" aria-label="Sair">⏻</a>
+      <button type="button" id="alternar-tema" class="btn-icone" aria-label="Alternar tema" title="Alternar tema"><svg class="icone" aria-hidden="true"><use href="#i-sol"/></svg></button>
+      <a href="sair.php" class="btn-icone" title="Sair" aria-label="Sair"><svg class="icone" aria-hidden="true"><use href="#i-sair"/></svg></a>
     </div>
   </header>
 

@@ -94,7 +94,18 @@ try {
   for (const arquivo of arquivos) {
     const destino = relative(RAIZ, arquivo).split('\\').join('/');
     const info = await stat(arquivo);
-    await cliente.uploadFrom(arquivo, destino);
+
+    // Subpasta: cria pelo caminho RELATIVO ao destino e volta para ele. Nunca
+    // caminho absoluto - foi assim que nasceu a pasta aninhada
+    // public_html/painel/public_html/painel que o site não servia.
+    const barra = destino.lastIndexOf('/');
+    if (barra > 0) {
+      await cliente.ensureDir(destino.slice(0, barra));
+      await cliente.uploadFrom(arquivo, destino.slice(barra + 1));
+      await cliente.cd(destinoFinal);
+    } else {
+      await cliente.uploadFrom(arquivo, destino);
+    }
     enviados += 1;
     bytes += info.size;
     console.log(`  enviado  ${destino}  (${Math.round(info.size / 1024)} KB)`);

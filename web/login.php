@@ -10,56 +10,63 @@ if (usuarioLogado() !== null) {
     exit;
 }
 
-$erro = '';
+$google = googleConfigurado();
+$erro   = '';
+$info   = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Mensagens da volta do Google. Textos fixos, escolhidos por chave: o que vem
+// na URL nunca é impresso na tela, então não há como injetar conteúdo por ali.
+$avisos = [
+    'pendente'     => ['info', 'Seu acesso foi solicitado. Assim que um administrador liberar, você poderá entrar com esta conta.'],
+    'cancelado'    => ['info', 'Login cancelado.'],
+    'expirado'     => ['erro', 'A tentativa de login expirou. Tente novamente.'],
+    'bloqueado'    => ['erro', 'Muitas tentativas seguidas. Aguarde 15 minutos antes de tentar de novo.'],
+    'falha'        => ['erro', 'Não foi possível confirmar o login. Tente novamente.'],
+    'indisponivel' => ['erro', 'Login com Google ainda não está configurado.'],
+];
+$chaveAviso = (string) ($_GET['aviso'] ?? '');
+if (isset($avisos[$chaveAviso])) {
+    [$tipo, $texto] = $avisos[$chaveAviso];
+    if ($tipo === 'erro') {
+        $erro = $texto;
+    } else {
+        $info = $texto;
+    }
+}
+
+// Login de reserva por senha: só existe enquanto o Google não está configurado.
+if (!$google && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (tentativasExcedidas()) {
         $erro = 'Muitas tentativas seguidas. Aguarde 15 minutos antes de tentar de novo.';
-    } elseif (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['csrf'] ?? ''))) {
-        // Impede que um site de terceiros submeta este formulário.
+    } elseif (!csrfValido($_POST['csrf'] ?? null)) {
         $erro = 'Sessão expirada. Recarregue a página e tente novamente.';
+    } elseif (autenticarSenha((string) ($_POST['login'] ?? ''), (string) ($_POST['senha'] ?? ''))) {
+        limparFalhas();
+        header('Location: index.php');
+        exit;
     } else {
-        $login = (string) ($_POST['login'] ?? '');
-        $senha = (string) ($_POST['senha'] ?? '');
-
-        if (autenticar($login, $senha)) {
-            limparFalhas();
-            header('Location: index.php');
-            exit;
-        }
-
         registrarFalha();
-        // Mensagem genérica de propósito: dizer "usuário não existe" entregaria
-        // quais logins são válidos para quem estiver tentando adivinhar.
+        // Genérica de propósito: não revela se o usuário existe.
         $erro = 'Usuário ou senha incorretos.';
     }
 }
 
-if (empty($_SESSION['csrf'])) {
-    $_SESSION['csrf'] = bin2hex(random_bytes(32));
-}
-$csrf = (string) $_SESSION['csrf'];
-
+$csrf = tokenCsrf();
 header('X-Robots-Tag: noindex, nofollow');
 ?>
 <!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Entrar · Grupo Alvorada</title>
 <meta name="theme-color" content="#CF0C0C">
 <link rel="icon" href="logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="login.css">
 </head>
 <body>
 
-<!-- Ícones desenhados uma vez e reutilizados com <use>. Traço de 1.75 e cantos
-     arredondados, no mesmo desenho em todos, para parecerem da mesma família. -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg width="0" height="0" class="sprite" aria-hidden="true">
   <defs>
     <symbol id="i-usuario" viewBox="0 0 24 24">
       <circle cx="12" cy="8.2" r="3.7"/>
@@ -85,6 +92,10 @@ header('X-Robots-Tag: noindex, nofollow');
       <path d="M12 7.6v5.2"/>
       <path d="M12 16.3h.01"/>
     </symbol>
+    <symbol id="i-relogio" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.8"/>
+      <path d="M12 7.4V12l3.1 2"/>
+    </symbol>
     <symbol id="i-seta" viewBox="0 0 24 24">
       <path d="M5 12h13.5"/>
       <path d="M13 6.5 18.5 12 13 17.5"/>
@@ -94,10 +105,7 @@ header('X-Robots-Tag: noindex, nofollow');
 
 <div class="tela">
 
-  <!-- ===================== MARCA ===================== -->
   <section class="marca">
-    <!-- A casa da logo, ampliada e cortada pela borda, em vermelho sobre
-         vermelho. Vem da própria marca, então não parece fundo genérico. -->
     <svg class="marca-casa" viewBox="0 0 200 200" aria-hidden="true">
       <path d="M14 104 100 26l86 78"/>
       <path d="M44 84v112M156 84v112"/>
@@ -105,9 +113,7 @@ header('X-Robots-Tag: noindex, nofollow');
       <path d="M140 52V22"/>
     </svg>
 
-    <div class="logo-caixa">
-      <img src="logo.png" alt="Grupo Alvorada">
-    </div>
+    <img class="logo" src="logo-branca.png" alt="Alvorada" width="134" height="128">
 
     <div class="marca-texto">
       <h1>
@@ -115,77 +121,91 @@ header('X-Robots-Tag: noindex, nofollow');
         <em>com inteligência de dados.</em>
       </h1>
     </div>
-
-    <div class="marca-rodape">Dados sincronizados do ERP Bling</div>
   </section>
 
-  <!-- ===================== FORMULÁRIO ===================== -->
   <section class="area-form">
-    <form class="form-caixa" method="post" autocomplete="on">
+    <div class="form-caixa">
 
       <h2>Bem-vindo de volta</h2>
-      <p class="sub">Entre com suas credenciais para acessar o painel.</p>
+      <p class="sub">
+        <?= $google ? 'Entre com sua conta Google autorizada.' : 'Entre com suas credenciais para acessar o painel.' ?>
+      </p>
 
       <?php if ($erro !== ''): ?>
-        <div class="erro" role="alert">
-          <svg class="icone erro-ico" aria-hidden="true"><use href="#i-alerta"/></svg>
+        <div class="aviso aviso-erro" role="alert">
+          <svg class="icone" aria-hidden="true"><use href="#i-alerta"/></svg>
           <span><?= htmlspecialchars($erro, ENT_QUOTES) ?></span>
         </div>
       <?php endif; ?>
 
-      <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES) ?>">
-
-      <div class="campo">
-        <label for="login">Usuário</label>
-        <div class="entrada">
-          <input type="text" id="login" name="login" placeholder="seu usuário"
-                 autocomplete="username" required autofocus>
-          <svg class="icone ico" aria-hidden="true"><use href="#i-usuario"/></svg>
+      <?php if ($info !== ''): ?>
+        <div class="aviso aviso-info" role="status">
+          <svg class="icone" aria-hidden="true"><use href="#i-relogio"/></svg>
+          <span><?= htmlspecialchars($info, ENT_QUOTES) ?></span>
         </div>
-      </div>
+      <?php endif; ?>
 
-      <div class="campo">
-        <label for="senha">Senha</label>
-        <div class="entrada">
-          <input type="password" id="senha" name="senha" placeholder="sua senha"
-                 autocomplete="current-password" required>
-          <svg class="icone ico" aria-hidden="true"><use href="#i-cadeado"/></svg>
-          <button type="button" class="ver-senha" id="ver-senha" aria-label="Mostrar senha">
-            <svg class="icone" aria-hidden="true"><use id="ver-senha-ico" href="#i-olho"/></svg>
+      <?php if ($google): ?>
+
+        <a class="btn-google" href="google-entrar.php">
+          <!-- Marca oficial do Google, nas cores do guia de identidade deles. -->
+          <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
+            <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+            <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+            <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
+          </svg>
+          <span>Entrar com Google</span>
+        </a>
+
+        <p class="nota-acesso">
+          Só entram contas liberadas por um administrador. No primeiro acesso,
+          seu pedido fica aguardando aprovação.
+        </p>
+
+      <?php else: ?>
+
+        <form method="post" autocomplete="on">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES) ?>">
+
+          <div class="campo">
+            <label for="login">Usuário</label>
+            <div class="entrada">
+              <input type="text" id="login" name="login" placeholder="seu usuário"
+                     autocomplete="username" required autofocus>
+              <svg class="icone ico" aria-hidden="true"><use href="#i-usuario"/></svg>
+            </div>
+          </div>
+
+          <div class="campo">
+            <label for="senha">Senha</label>
+            <div class="entrada">
+              <input type="password" id="senha" name="senha" placeholder="sua senha"
+                     autocomplete="current-password" required>
+              <svg class="icone ico" aria-hidden="true"><use href="#i-cadeado"/></svg>
+              <button type="button" class="ver-senha" id="ver-senha" aria-label="Mostrar senha">
+                <svg class="icone" aria-hidden="true"><use id="ver-senha-ico" href="#i-olho"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-entrar">
+            <span>Entrar no painel</span>
+            <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
           </button>
-        </div>
-      </div>
+        </form>
 
-      <button type="submit" class="btn-entrar">
-        <span>Entrar no painel</span>
-        <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
-      </button>
+      <?php endif; ?>
 
       <p class="rodape-form">
         Acesso restrito à equipe. Após 8 tentativas incorretas, novas tentativas
         ficam bloqueadas por 15 minutos.
       </p>
-    </form>
+    </div>
   </section>
 
 </div>
 
-<script>
-  // Revelar a senha reduz erro de digitação — e aqui errar 8 vezes bloqueia
-  // o acesso por 15 minutos.
-  (function () {
-    var botao = document.getElementById('ver-senha');
-    var icone = document.getElementById('ver-senha-ico');
-    var campo = document.getElementById('senha');
-    botao.addEventListener('click', function () {
-      var oculta = campo.type === 'password';
-      campo.type = oculta ? 'text' : 'password';
-      icone.setAttribute('href', oculta ? '#i-olho-fechado' : '#i-olho');
-      botao.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
-      campo.focus();
-    });
-  })();
-</script>
-
+<script src="login.js"></script>
 </body>
 </html>

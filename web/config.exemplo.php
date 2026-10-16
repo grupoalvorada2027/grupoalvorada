@@ -23,3 +23,20 @@ const USUARIOS = [
         'papel' => 'admin',
     ],
 ];
+
+// ------------------------------------------------------------------
+// Login com Google
+//
+// Credenciais criadas em console.cloud.google.com > APIs e servicos >
+// Credenciais > ID do cliente OAuth (tipo: Aplicativo da Web).
+// Enquanto GOOGLE_CLIENT_ID estiver vazio, a tela de entrada mostra o login
+// por senha como reserva; depois de preenchido, a senha deixa de funcionar.
+// ------------------------------------------------------------------
+const GOOGLE_CLIENT_ID     = '';
+const GOOGLE_CLIENT_SECRET = '';
+// Precisa ser IDENTICA a 'URIs de redirecionamento autorizados' no Google.
+const GOOGLE_REDIRECT_URI  = 'https://grupoalvorada1029.com.br/google-callback.php';
+
+// E-mails que entram como administrador no primeiro acesso, sem aprovacao.
+// Os demais pedem acesso e aguardam um administrador liberar na tela Usuarios.
+const ADMINS_INICIAIS = ['grupoalvorada2027@gmail.com'];

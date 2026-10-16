@@ -34,3 +34,9 @@ web/config.php
 # Clone vazio do proprio repositorio, criado por engano dentro do projeto.
 # Nao apagamos para nao mexer em algo seu; pode remover a pasta com seguranca.
 /grupoalvorada/
+
+# Estado gravado pelo painel no servidor: cadastro de usuarios e controle de
+# tentativas. Nunca devem ir para o Git nem ser sobrescritos por deploy.
+web/.usuarios.json
+web/.tentativas.json
+web/*.tmp

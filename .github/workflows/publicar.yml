@@ -73,6 +73,8 @@ jobs:
             dados.json
             .ponte-*.json
             .tentativas.json
+            .usuarios.json
+            *.tmp
             .ftpquota
             .well-known/**
             error_log
