@@ -1,0 +1,97 @@
+# Painel de lucratividade - Apache (HostGator).
+#
+# A protecao de acesso e feita pelo login em PHP (login.php + auth.php), nao
+# pelo "Privacidade de Diretorio" do cPanel: o login proprio tem niveis de
+# acesso, botao de sair e bloqueio por tentativas, que o HTTP Basic nao tem.
+#
+# ATENCAO: se voce ativar a Privacidade de Diretorio no cPanel, ele grava as
+# diretivas de autenticacao NESTE arquivo - e a proxima publicacao por FTP as
+# apaga sem avisar. Use uma coisa ou outra, nunca as duas.
+
+# ---------------------------------------------------------------
+# HTTPS obrigatorio. O painel expoe custo e margem.
+# ---------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+</IfModule>
+
+# ===============================================================
+# BLOQUEIOS
+#
+# Escrito para Apache 2.4 (Require) e 2.2 (Order/Deny) ao mesmo tempo, porque
+# uma diretiva desconhecida pelo servidor derruba o site inteiro com erro 500.
+# ===============================================================
+
+# ---------------------------------------------------------------
+# O dados.json contem custo e margem de toda a operacao.
+#
+# Bloqueado para acesso direto. Quem entrega e o dados.php, que confere a
+# sessao e remove os campos sensiveis conforme o papel do usuario. Sem este
+# bloqueio o login seria decorativo: bastaria abrir /dados.json no navegador.
+#
+# O dados.php le o arquivo pelo sistema de arquivos, entao nao e afetado.
+# ---------------------------------------------------------------
+<FilesMatch "\.json$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# ---------------------------------------------------------------
+# config.php guarda os hashes das senhas e a chave da ponte OAuth.
+#
+# O PHP normalmente o executa e devolve corpo vazio, sem revelar nada. Mas se o
+# interpretador falhar ou for desativado, o Apache serviria o arquivo como texto
+# e entregaria os segredos. Bloqueamos o acesso direto; o require_once do PHP
+# nao passa pelo servidor web, entao continua funcionando.
+# ---------------------------------------------------------------
+<FilesMatch "^config(\.exemplo)?\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# ---------------------------------------------------------------
+# Arquivos ocultos: troca do OAuth, controle de tentativas, etc.
+# ---------------------------------------------------------------
+<FilesMatch "^\.">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# ---------------------------------------------------------------
+# Sem listagem de diretorio.
+# ---------------------------------------------------------------
+Options -Indexes
+
+# ---------------------------------------------------------------
+# Cabecalhos
+# ---------------------------------------------------------------
+<IfModule mod_headers.c>
+  <FilesMatch "\.(css|js)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "same-origin"
+  Header set X-Robots-Tag "noindex, nofollow"
+</IfModule>
+
+DirectoryIndex index.php

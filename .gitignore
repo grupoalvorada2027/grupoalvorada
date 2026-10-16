@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Segredos: client_secret do Bling, senha do banco, JWT secret.
+# NUNCA remova estas linhas.
+.env
+.env.*
+!.env.example
+
+# Credenciais do tunel Cloudflare
+*.cloudflared.json
+cloudflared/*.json
+
+# Logs e dumps
+logs/
+*.log
+backups/
+*.dump
+*.sql.gz
+
+# Sistema operacional / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

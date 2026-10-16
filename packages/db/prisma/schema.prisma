@@ -1,0 +1,440 @@
+// Schema do Grupo Alvorada BI
+//
+// Decisoes de modelagem que NAO sao detalhes:
+//
+// 1. Valores monetarios usam Decimal, nunca Float. Float acumula erro de
+//    arredondamento e margem calculada com Float nao fecha com o extrato.
+//
+// 2. ProdutoCusto e historico com vigencia. O custo de um produto muda com o
+//    tempo; calcular a margem de um pedido antigo com o custo de hoje produz
+//    numero errado de forma silenciosa. A margem usa o custo vigente na data
+//    do pedido.
+//
+// 3. PedidoTaxa.origem distingue taxa REAL (importada do marketplace via Bling)
+//    de ESTIMADA (calculada por RegraTaxa). Sem isso nao ha como saber o quanto
+//    de uma analise e fato e o quanto e palpite.
+//
+// 4. Pedido.raw guarda o JSON original da API. O custo de armazenamento e baixo
+//    e permite reprocessar o historico quando descobrirmos um campo novo, sem
+//    precisar baixar tudo de novo (o limite de 3 req/s torna refazer caro).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Empresa e autenticacao no Bling
+// ============================================================
+
+model Empresa {
+  id       Int      @id @default(autoincrement())
+  blingId  String   @unique @map("bling_id") // companyId enviado nos webhooks
+  nome     String
+  ativa    Boolean  @default(true)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  tokens      OAuthToken[]
+  canais      Canal[]
+  produtos    Produto[]
+  pedidos     Pedido[]
+  checkpoints SyncCheckpoint[]
+
+  @@map("empresa")
+}
+
+/// Par de tokens OAuth do Bling. Uma linha por empresa.
+///
+/// O refresh e serializado por advisory lock do Postgres: o Bling bane o IP por
+/// 60 minutos apos 20 chamadas a /oauth/token em 60 segundos, e dois processos
+/// renovando ao mesmo tempo chegam la rapido.
+model OAuthToken {
+  id        Int     @id @default(autoincrement())
+  empresaId Int     @unique @map("empresa_id")
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  accessToken  String  @map("access_token")
+  refreshToken String  @map("refresh_token")
+  tokenType    String  @default("Bearer") @map("token_type")
+  scope        String?
+
+  /// Expiracao do access_token (curta, horas).
+  expiraEm DateTime @map("expira_em")
+
+  /// Expiracao do refresh_token (30 dias). Se passar desta data, a autorizacao
+  /// morre e exige reautorizacao manual no navegador.
+  refreshExpiraEm DateTime @map("refresh_expira_em")
+
+  ultimoRefreshEm DateTime? @map("ultimo_refresh_em")
+  atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
+
+  @@map("oauth_token")
+}
+
+// ============================================================
+// Canais de venda
+// ============================================================
+
+enum CanalTipo {
+  MERCADO_LIVRE
+  SHOPEE
+  AMAZON
+  MAGALU
+  LOJA_PROPRIA
+  OUTRO
+}
+
+/// Canal de venda, espelhando as "lojas" do Bling.
+model Canal {
+  id        Int     @id @default(autoincrement())
+  empresaId Int     @map("empresa_id")
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  blingId  String    @map("bling_id")
+  nome     String
+  tipo     CanalTipo @default(OUTRO)
+  ativo    Boolean   @default(true)
+  criadoEm DateTime  @default(now()) @map("criado_em")
+
+  pedidos    Pedido[]
+  regrasTaxa RegraTaxa[]
+
+  @@unique([empresaId, blingId])
+  @@index([tipo])
+  @@map("canal")
+}
+
+// ============================================================
+// Produtos e custo historico
+// ============================================================
+
+model Produto {
+  id        Int     @id @default(autoincrement())
+  empresaId Int     @map("empresa_id")
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  blingId String   @map("bling_id")
+  sku     String
+  nome    String
+  gtin    String?
+  unidade String?
+  pesoKg  Decimal? @map("peso_kg") @db.Decimal(10, 4)
+
+  /// Aliquota de imposto efetiva do produto, em percentual (ex: 12.0 = 12%).
+  /// Usada no calculo de margem. Editavel na interface.
+  aliquotaImposto Decimal @default(0) @map("aliquota_imposto") @db.Decimal(6, 3)
+
+  ativo          Boolean   @default(true)
+  raw            Json?
+  sincronizadoEm DateTime? @map("sincronizado_em")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+
+  custos ProdutoCusto[]
+  itens  PedidoItem[]
+
+  @@unique([empresaId, blingId])
+  @@index([empresaId, sku])
+  @@map("produto")
+}
+
+/// Custo do produto com vigencia. Nunca sobrescrevemos o custo: inserimos uma
+/// nova vigencia e fechamos a anterior. E o que permite recalcular a margem de
+/// um pedido antigo com o custo que valia naquele dia.
+model ProdutoCusto {
+  id        Int     @id @default(autoincrement())
+  produtoId Int     @map("produto_id")
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  /// precoCusto do Bling. Atencao: na API v3 este campo vive dentro do objeto
+  /// "fornecedor", nao na raiz do produto, e GET /produtos nem sempre o retorna
+  /// (usamos GET /produtos/custo, que aceita 40 SKUs por chamada).
+  custo       Decimal  @db.Decimal(14, 4)
+  precoCompra Decimal? @map("preco_compra") @db.Decimal(14, 4)
+
+  vigenciaInicio DateTime  @map("vigencia_inicio")
+  vigenciaFim    DateTime? @map("vigencia_fim") // null = vigente
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+
+  @@unique([produtoId, vigenciaInicio])
+  @@index([produtoId, vigenciaInicio, vigenciaFim])
+  @@map("produto_custo")
+}
+
+// ============================================================
+// Pedidos
+// ============================================================
+
+model Pedido {
+  id        Int     @id @default(autoincrement())
+  empresaId Int     @map("empresa_id")
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  blingId String  @map("bling_id")
+  numero  String?
+
+  /// Numero do pedido no marketplace (ML, Shopee). Util para conferencia manual.
+  numeroLoja String? @map("numero_loja")
+
+  canalId Int?   @map("canal_id")
+  canal   Canal? @relation(fields: [canalId], references: [id])
+
+  data      DateTime
+  dataSaida DateTime? @map("data_saida")
+
+  situacaoId   Int?    @map("situacao_id")
+  situacaoNome String? @map("situacao_nome")
+
+  /// Falso para cancelados e devolvidos. Toda view analitica filtra por este
+  /// campo: incluir pedido cancelado infla faturamento e distorce a margem.
+  considerarNaAnalise Boolean @default(true) @map("considerar_na_analise")
+
+  totalProdutos Decimal @default(0) @map("total_produtos") @db.Decimal(14, 4)
+  totalPedido   Decimal @default(0) @map("total_pedido") @db.Decimal(14, 4)
+  desconto      Decimal @default(0) @db.Decimal(14, 4)
+
+  /// Frete cobrado do cliente (receita) e frete pago pelo vendedor (custo).
+  /// Sao coisas diferentes e so o segundo entra na margem.
+  freteCliente  Decimal @default(0) @map("frete_cliente") @db.Decimal(14, 4)
+  freteVendedor Decimal @default(0) @map("frete_vendedor") @db.Decimal(14, 4)
+
+  contatoNome String? @map("contato_nome")
+  contatoDoc  String? @map("contato_doc")
+
+  raw            Json?
+  sincronizadoEm DateTime @default(now()) @map("sincronizado_em")
+
+  /// Data do evento que gerou a ultima atualizacao. Webhooks do Bling chegam
+  /// fora de ordem, entao descartamos payload mais antigo que o ja aplicado.
+  versaoEvento DateTime? @map("versao_evento")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+
+  itens PedidoItem[]
+  taxas PedidoTaxa[]
+
+  @@unique([empresaId, blingId])
+  @@index([empresaId, data])
+  @@index([canalId, data])
+  @@index([considerarNaAnalise, data])
+  @@map("pedido")
+}
+
+model PedidoItem {
+  id       Int    @id @default(autoincrement())
+  pedidoId Int    @map("pedido_id")
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  produtoId Int?     @map("produto_id")
+  produto   Produto? @relation(fields: [produtoId], references: [id])
+
+  /// Guardamos sku e descricao no item porque o produto pode ser renomeado ou
+  /// excluido no Bling depois da venda.
+  sku       String?
+  descricao String?
+
+  quantidade    Decimal @db.Decimal(14, 4)
+  valorUnitario Decimal @map("valor_unitario") @db.Decimal(14, 4)
+  desconto      Decimal @default(0) @db.Decimal(14, 4)
+
+  /// Custo unitario congelado no momento do calculo, resolvido pela vigencia na
+  /// data do pedido. Null quando o produto nao tem custo cadastrado - e isso
+  /// precisa aparecer como lacuna nos relatorios, nao virar margem falsa.
+  custoUnitario Decimal? @map("custo_unitario") @db.Decimal(14, 4)
+
+  @@index([pedidoId])
+  @@index([sku])
+  @@map("pedido_item")
+}
+
+enum TipoTaxa {
+  COMISSAO
+  FRETE
+  TARIFA_FIXA
+  ANTECIPACAO
+  OUTRA
+}
+
+enum OrigemTaxa {
+  /// Importada do marketplace pelo Bling. Requer a importacao de taxas ativada
+  /// na configuracao da loja (disponivel nos planos Titanio/Diamante/Elite).
+  REAL
+
+  /// Calculada por RegraTaxa quando o valor real nao veio.
+  ESTIMADO
+}
+
+model PedidoTaxa {
+  id       Int    @id @default(autoincrement())
+  pedidoId Int    @map("pedido_id")
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  tipo      TipoTaxa
+  origem    OrigemTaxa
+  valor     Decimal    @db.Decimal(14, 4)
+  descricao String?
+
+  @@index([pedidoId])
+  @@index([origem])
+  @@map("pedido_taxa")
+}
+
+/// Regra de taxa por canal, usada quando a taxa real nao veio do marketplace.
+/// Tem vigencia porque os marketplaces reajustam comissao (a Shopee subiu taxas
+/// no inicio de 2026, por exemplo) e a margem historica precisa usar a regra
+/// que valia na epoca.
+model RegraTaxa {
+  id      Int   @id @default(autoincrement())
+  canalId Int   @map("canal_id")
+  canal   Canal @relation(fields: [canalId], references: [id], onDelete: Cascade)
+
+  descricao String
+
+  /// Comissao percentual (ex: 14.5 = 14,5% do valor do item).
+  percentual Decimal @default(0) @db.Decimal(6, 3)
+
+  /// Tarifa fixa por item/pedido (o ML cobra taxa fixa em itens de baixo valor).
+  taxaFixa Decimal @default(0) @map("taxa_fixa") @db.Decimal(14, 4)
+
+  /// Faixa de valor do item em que a regra se aplica. Null = sem limite.
+  valorMinimo Decimal? @map("valor_minimo") @db.Decimal(14, 4)
+  valorMaximo Decimal? @map("valor_maximo") @db.Decimal(14, 4)
+
+  /// Quando preenchido, a regra vale somente para este SKU.
+  sku String?
+
+  vigenciaInicio DateTime  @map("vigencia_inicio")
+  vigenciaFim    DateTime? @map("vigencia_fim")
+  prioridade     Int       @default(0)
+  ativa          Boolean   @default(true)
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+
+  @@index([canalId, vigenciaInicio])
+  @@map("regra_taxa")
+}
+
+// ============================================================
+// Sincronizacao
+// ============================================================
+
+enum StatusWebhook {
+  PENDENTE
+  PROCESSADO
+  ERRO
+  IGNORADO
+}
+
+/// Fila de webhooks recebidos do Bling.
+///
+/// O Bling exige resposta 2xx em menos de 5 segundos, senao reenvia e acaba
+/// desativando o webhook. Por isso a rota HTTP apenas valida a assinatura,
+/// grava aqui e responde 200. O processamento e feito pelo worker.
+model WebhookEvent {
+  id Int @id @default(autoincrement())
+
+  /// eventId do Bling. Unico, e o que garante idempotencia: o mesmo evento
+  /// pode ser entregue mais de uma vez.
+  eventId String @unique @map("event_id")
+
+  evento     String // formato "recurso.acao", ex: "order.updated"
+  companyId  String?   @map("company_id")
+  versao     String?
+  dataEvento DateTime? @map("data_evento")
+
+  payload Json
+
+  status     StatusWebhook @default(PENDENTE)
+  tentativas Int           @default(0)
+  erro       String?
+
+  recebidoEm   DateTime  @default(now()) @map("recebido_em")
+  processadoEm DateTime? @map("processado_em")
+
+  @@index([status, recebidoEm])
+  @@index([evento])
+  @@map("webhook_event")
+}
+
+enum StatusSync {
+  OCIOSO
+  RODANDO
+  ERRO
+}
+
+/// Checkpoint de sincronizacao por entidade. E o que torna o backfill retomavel:
+/// a 3 req/s uma importacao interrompida nao pode comecar do zero.
+model SyncCheckpoint {
+  id        Int     @id @default(autoincrement())
+  empresaId Int     @map("empresa_id")
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  entidade String // "pedidos", "produtos", "custos", "canais"
+
+  /// Ate onde ja sincronizamos (data do ultimo registro processado).
+  cursorData DateTime? @map("cursor_data")
+
+  /// Pagina atual, para retomar um backfill interrompido no meio.
+  cursorPagina Int? @map("cursor_pagina")
+
+  status         StatusSync @default(OCIOSO)
+  registrosLidos Int        @default(0) @map("registros_lidos")
+  ultimoErro     String?    @map("ultimo_erro")
+  iniciadoEm     DateTime?  @map("iniciado_em")
+  concluidoEm    DateTime?  @map("concluido_em")
+  atualizadoEm   DateTime   @updatedAt @map("atualizado_em")
+
+  @@unique([empresaId, entidade])
+  @@map("sync_checkpoint")
+}
+
+// ============================================================
+// Usuarios e acesso
+// ============================================================
+
+enum PapelUsuario {
+  /// Acesso total, inclusive gestao de usuarios e regras de taxa.
+  ADMIN
+
+  /// Ve custo, margem e todos os relatorios. Nao gerencia usuarios.
+  GESTOR
+
+  /// Ve volume e faturamento. NAO ve custo nem margem.
+  OPERADOR
+}
+
+model Usuario {
+  id        Int          @id @default(autoincrement())
+  email     String       @unique
+  senhaHash String       @map("senha_hash")
+  nome      String
+  papel     PapelUsuario @default(OPERADOR)
+  ativo     Boolean      @default(true)
+
+  ultimoLoginEm DateTime? @map("ultimo_login_em")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+  atualizadoEm  DateTime  @updatedAt @map("atualizado_em")
+
+  sessoes Sessao[]
+
+  @@map("usuario")
+}
+
+/// Refresh tokens ativos. Guardamos o hash, nunca o token em si: um vazamento
+/// do banco nao deve permitir assumir a sessao de ninguem.
+model Sessao {
+  id        Int     @id @default(autoincrement())
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  tokenHash  String    @unique @map("token_hash")
+  expiraEm   DateTime  @map("expira_em")
+  revogadaEm DateTime? @map("revogada_em")
+  userAgent  String?   @map("user_agent")
+  ip         String?
+  criadoEm   DateTime  @default(now()) @map("criado_em")
+
+  @@index([usuarioId])
+  @@map("sessao")
+}
