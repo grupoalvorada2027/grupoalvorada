@@ -1,0 +1,277 @@
+/* Tela de entrada — Grupo Alvorada
+ *
+ * Vermelho #CF0C0C extraído da própria logo (pixel dominante), não estimado no
+ * olho. Branco sobre ele dá 5,66:1 de contraste, acima do mínimo de 4,5:1 para
+ * texto normal — então o lado da marca pode usar texto branco sem reservas.
+ *
+ * Arquivo separado do estilo.css porque a entrada é independente do painel:
+ * quem está aqui ainda não carregou dado nenhum, e a página precisa ser leve.
+ */
+
+:root {
+  --vermelho: #CF0C0C;
+  --vermelho-escuro: #8A0606;
+  --vermelho-profundo: #5E0404;
+
+  --branco: #FFFFFF;
+  --quase-branco: #FAFAFA;
+  --cinza-campo: #F2F2F2;
+  --borda: #E3E3E6;
+  --borda-forte: #C9C9CE;
+
+  --txt: #1A1A1A;
+  --txt-2: #5C5C66;
+  --txt-3: #8A8A94;
+
+  --erro: #BF0A2B;
+  --raio: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--txt);
+  background: var(--branco);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tela {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  min-height: 100vh;
+}
+
+/* ===================== LADO DA MARCA ===================== */
+
+.marca {
+  position: relative;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(255,255,255,0.10), transparent 46%),
+    linear-gradient(152deg, var(--vermelho) 0%, var(--vermelho-escuro) 58%, var(--vermelho-profundo) 100%);
+  color: var(--branco);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 52px 56px;
+  overflow: hidden;
+}
+
+/* Malha discreta, no espírito de uma planta baixa. Fica atrás do conteúdo e
+   bem apagada: é textura, não desenho — se competir com o texto, atrapalha. */
+.marca::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(ellipse at 30% 42%, #000 18%, transparent 76%);
+  -webkit-mask-image: radial-gradient(ellipse at 30% 42%, #000 18%, transparent 76%);
+  pointer-events: none;
+}
+
+.marca > * { position: relative; z-index: 1; }
+
+.logo-caixa {
+  width: 92px;
+  height: 92px;
+  border-radius: 20px;
+  background: var(--branco);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 14px 38px rgba(0,0,0,0.26);
+  overflow: hidden;
+}
+.logo-caixa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.marca-texto { max-width: 30rem; }
+
+.marca h1 {
+  font-size: clamp(1.9rem, 3.1vw, 2.65rem);
+  line-height: 1.14;
+  letter-spacing: -0.028em;
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+.marca h1 em { font-style: normal; opacity: 0.74; display: block; font-weight: 500; }
+
+.marca p {
+  font-size: 1rem;
+  line-height: 1.62;
+  color: rgba(255,255,255,0.86);
+  margin: 0;
+  max-width: 27rem;
+}
+
+.pontos { display: flex; flex-direction: column; gap: 13px; margin-top: 30px; }
+.ponto { display: flex; align-items: flex-start; gap: 12px; font-size: 0.92rem; }
+.ponto-ico {
+  width: 24px; height: 24px; border-radius: 7px; flex: none;
+  background: rgba(255,255,255,0.16);
+  display: grid; place-items: center; font-size: 12px;
+  color: var(--branco);
+}
+.ponto span { color: rgba(255,255,255,0.9); line-height: 1.45; padding-top: 2px; }
+
+.marca-rodape {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.6);
+  display: flex; align-items: center; gap: 9px;
+}
+.marca-rodape::before {
+  content: ""; width: 26px; height: 1px;
+  background: rgba(255,255,255,0.32);
+}
+
+/* ===================== LADO DO FORMULÁRIO ===================== */
+
+.area-form {
+  display: grid;
+  place-items: center;
+  padding: 44px 36px;
+  background: var(--branco);
+}
+
+.form-caixa { width: 100%; max-width: 376px; }
+
+.logo-mobile { display: none; }
+
+.form-caixa h2 {
+  font-size: 1.62rem;
+  letter-spacing: -0.028em;
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+.sub {
+  color: var(--txt-2);
+  font-size: 0.93rem;
+  margin: 0 0 30px;
+}
+
+.campo { margin-bottom: 17px; }
+.campo label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--txt-2);
+  margin-bottom: 7px;
+  letter-spacing: 0.012em;
+}
+
+.entrada { position: relative; display: flex; align-items: center; }
+.entrada .ico {
+  position: absolute; left: 14px;
+  color: var(--txt-3); font-size: 15px;
+  pointer-events: none; line-height: 1;
+}
+.entrada input {
+  width: 100%;
+  padding: 13px 15px 13px 42px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--txt);
+  background: var(--cinza-campo);
+  border: 1.5px solid transparent;
+  border-radius: var(--raio);
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+.entrada input::placeholder { color: var(--txt-3); }
+.entrada input:hover { background: #EDEDEF; }
+.entrada input:focus {
+  outline: none;
+  background: var(--branco);
+  border-color: var(--vermelho);
+  box-shadow: 0 0 0 3.5px rgba(207,12,12,0.12);
+}
+.entrada input:focus + .ico,
+.entrada:focus-within .ico { color: var(--vermelho); }
+
+/* O botão de revelar a senha reduz erro de digitação, que é a causa mais
+   comum de "não consigo entrar" — e aqui o bloqueio vem em 8 tentativas. */
+.ver-senha {
+  position: absolute; right: 8px;
+  background: none; border: 0; cursor: pointer;
+  color: var(--txt-3); font-size: 13px; font-family: inherit;
+  padding: 7px 9px; border-radius: 7px; line-height: 1;
+}
+.ver-senha:hover { color: var(--txt); background: rgba(0,0,0,0.045); }
+
+.btn-entrar {
+  width: 100%;
+  margin-top: 9px;
+  padding: 14px;
+  font-size: 0.97rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--branco);
+  background: var(--vermelho);
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.08s ease, box-shadow 0.16s ease;
+}
+.btn-entrar:hover {
+  background: #B80A0A;
+  box-shadow: 0 7px 20px rgba(207,12,12,0.26);
+}
+.btn-entrar:active { transform: translateY(1px); }
+.btn-entrar:focus-visible {
+  outline: 3px solid rgba(207,12,12,0.4);
+  outline-offset: 2px;
+}
+
+.erro {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: #FDF1F3;
+  border: 1px solid #F3C9D1;
+  color: var(--erro);
+  border-radius: var(--raio);
+  padding: 12px 14px;
+  font-size: 0.87rem;
+  line-height: 1.45;
+  margin-bottom: 22px;
+}
+.erro-ico { flex: none; font-weight: 700; line-height: 1.3; }
+
+.rodape-form {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--borda);
+  font-size: 0.79rem;
+  color: var(--txt-3);
+  line-height: 1.6;
+}
+
+/* ===================== TELAS PEQUENAS ===================== */
+
+@media (max-width: 900px) {
+  .tela { grid-template-columns: 1fr; }
+
+  /* No celular o painel da marca vira só uma faixa: o que importa é entrar,
+     e rolar a tela para achar o formulário seria um estorvo. */
+  .marca {
+    padding: 26px 24px;
+    min-height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+  .marca-texto, .pontos, .marca-rodape { display: none; }
+  .logo-caixa { width: 52px; height: 52px; border-radius: 13px; box-shadow: none; }
+  .marca::after {
+    content: "Grupo Alvorada";
+    font-size: 1.08rem; font-weight: 700; letter-spacing: -0.02em;
+    position: relative; z-index: 1;
+  }
+  .area-form { padding: 36px 24px; align-items: start; }
+  .form-caixa h2 { font-size: 1.45rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
