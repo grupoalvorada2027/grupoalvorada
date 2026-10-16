@@ -1,0 +1,67 @@
+# Verificação do código.
+#
+# Roda em todo push e em todo pull request. É a rede que impede uma alteração
+# quebrada de chegar a homologação ou a produção: a publicação só acontece
+# depois que este workflow passa.
+#
+# Não precisa de banco nem de credenciais do Bling — typecheck e testes são
+# puros, por isso rodam em qualquer máquina.
+
+name: Verificar
+
+on:
+  push:
+    branches: [main, homologacao]
+  pull_request:
+    branches: [main, homologacao]
+  # Permite que o workflow de publicação chame este antes de enviar nada.
+  workflow_call:
+
+jobs:
+  verificar:
+    name: Typecheck e testes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # O Prisma gera tipos a partir do schema. Sem isto o typecheck falha por
+      # não encontrar os tipos do banco — e não é erro de código.
+      - name: Gerar o cliente Prisma
+        run: npx prisma generate --schema packages/db/prisma/schema.prisma
+        env:
+          DATABASE_URL: 'postgresql://usuario:senha@localhost:5432/placeholder'
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Testes do cálculo de margem
+        run: npm run test -w @alvorada/shared
+
+      - name: Testes do cliente Bling
+        run: npm run test -w @alvorada/bling
+
+      - name: Testes de leitura dos campos do Bling
+        run: npx tsx --test "apps/worker/src/persistencia.test.ts"
+
+      - name: Conferir que nenhum segredo entrou no repositório
+        run: |
+          # O .env e o config.php guardam client_secret, senhas e hashes.
+          # Se algum deles for versionado por engano, o build para aqui.
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "ERRO: .env está versionado"; exit 1
+          fi
+          if git ls-files --error-unmatch web/config.php 2>/dev/null; then
+            echo "ERRO: web/config.php está versionado"; exit 1
+          fi
+          echo "OK: nenhum arquivo de segredo versionado"

@@ -1,0 +1,102 @@
+# Publicação do painel na HostGator.
+#
+#   branch homologacao  ->  ambiente de teste
+#   branch main         ->  produção
+#
+# Publica APENAS a pasta web/ (o painel). O worker roda no servidor da empresa e
+# não é alcançável pelo GitHub — ele continua sendo atualizado por `git pull`
+# lá. Ver docs/esteira-homologacao.md.
+#
+# A publicação só roda depois que o workflow "Verificar" passa: nenhuma
+# alteração quebrada chega ao ar sem antes falhar no typecheck ou nos testes.
+
+name: Publicar
+
+on:
+  push:
+    branches: [main, homologacao]
+  # Permite publicar manualmente pela aba Actions, útil para refazer um deploy
+  # sem precisar de um commit novo.
+  workflow_dispatch:
+
+concurrency:
+  # Dois deploys simultâneos no mesmo FTP se atropelam e podem deixar a pasta
+  # num estado misto. Um de cada vez, por ambiente.
+  group: publicar-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: Verificar antes de publicar
+    uses: ./.github/workflows/verificar.yml
+
+  publicar:
+    name: Enviar por FTP
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'producao' || 'homologacao' }}
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Identificar o ambiente
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "Publicando em PRODUÇÃO"
+          else
+            echo "Publicando em HOMOLOGAÇÃO"
+          fi
+
+      - name: Enviar a pasta web/
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_SENHA }}
+          protocol: ftps
+          # A HostGator usa o certificado do servidor compartilhado, que não
+          # casa com o hostname. O canal segue criptografado.
+          security: loose
+          local-dir: ./web/
+          server-dir: ./
+          # Arquivos que o deploy NUNCA pode tocar:
+          #   config.php  - segredos, existe só no servidor
+          #   dados.json  - publicado pelo worker a cada sincronização
+          #   .ponte-*    - troca do OAuth, some em segundos
+          #   .tentativas - controle de força bruta do login
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            config.php
+            dados.json
+            .ponte-*.json
+            .tentativas.json
+            .ftpquota
+            .well-known/**
+            error_log
+
+      - name: Conferir se o painel respondeu
+        run: |
+          URL="${{ vars.URL_PAINEL }}"
+          if [ -z "$URL" ]; then
+            echo "Variável URL_PAINEL não definida; pulando a conferência."
+            exit 0
+          fi
+          # O painel exige login, então 200 na tela de login já prova que o
+          # Apache está servindo os arquivos novos.
+          CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL/login.php")
+          echo "GET $URL/login.php -> $CODIGO"
+          if [ "$CODIGO" != "200" ]; then
+            echo "ERRO: o painel não respondeu como esperado."
+            exit 1
+          fi
+          # O arquivo de dados não pode ficar acessível sem autenticação.
+          DADOS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL/dados.json")
+          echo "GET $URL/dados.json -> $DADOS (esperado 403)"
+          if [ "$DADOS" != "403" ]; then
+            echo "ERRO: dados.json está acessível sem login."
+            exit 1
+          fi
+          echo "Publicação conferida."
