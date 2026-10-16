@@ -57,10 +57,54 @@ header('X-Robots-Tag: noindex, nofollow');
 </head>
 <body>
 
+<!-- Ícones desenhados uma vez e reutilizados com <use>. Traço de 1.75 e cantos
+     arredondados, no mesmo desenho em todos, para parecerem da mesma família. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-usuario" viewBox="0 0 24 24">
+      <circle cx="12" cy="8.2" r="3.7"/>
+      <path d="M4.8 20c.9-3.6 3.8-5.6 7.2-5.6s6.3 2 7.2 5.6"/>
+    </symbol>
+    <symbol id="i-cadeado" viewBox="0 0 24 24">
+      <rect x="4.75" y="10.5" width="14.5" height="10" rx="2.6"/>
+      <path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/>
+      <path d="M12 14.6v2"/>
+    </symbol>
+    <symbol id="i-olho" viewBox="0 0 24 24">
+      <path d="M2.6 12.3C4.5 8.4 8 6.2 12 6.2s7.5 2.2 9.4 6.1c-1.9 3.9-5.4 6.1-9.4 6.1s-7.5-2.2-9.4-6.1Z"/>
+      <circle cx="12" cy="12.3" r="2.9"/>
+    </symbol>
+    <symbol id="i-olho-fechado" viewBox="0 0 24 24">
+      <path d="M9.9 6.5A9.6 9.6 0 0 1 12 6.2c4 0 7.5 2.2 9.4 6.1a11 11 0 0 1-2.3 3.2"/>
+      <path d="M6.3 8.2a11 11 0 0 0-3.7 4.1c1.9 3.9 5.4 6.1 9.4 6.1a9.7 9.7 0 0 0 4.6-1.1"/>
+      <path d="M10 10.2a2.9 2.9 0 0 0 4 4.1"/>
+      <path d="M3.5 3.5l17 17"/>
+    </symbol>
+    <symbol id="i-alerta" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.8"/>
+      <path d="M12 7.6v5.2"/>
+      <path d="M12 16.3h.01"/>
+    </symbol>
+    <symbol id="i-seta" viewBox="0 0 24 24">
+      <path d="M5 12h13.5"/>
+      <path d="M13 6.5 18.5 12 13 17.5"/>
+    </symbol>
+  </defs>
+</svg>
+
 <div class="tela">
 
   <!-- ===================== MARCA ===================== -->
   <section class="marca">
+    <!-- A casa da logo, ampliada e cortada pela borda, em vermelho sobre
+         vermelho. Vem da própria marca, então não parece fundo genérico. -->
+    <svg class="marca-casa" viewBox="0 0 200 200" aria-hidden="true">
+      <path d="M14 104 100 26l86 78"/>
+      <path d="M44 84v112M156 84v112"/>
+      <path d="M86 196v-54h28v54"/>
+      <path d="M140 52V22"/>
+    </svg>
+
     <div class="logo-caixa">
       <img src="logo.png" alt="Grupo Alvorada">
     </div>
@@ -70,26 +114,6 @@ header('X-Robots-Tag: noindex, nofollow');
         Materiais de construção
         <em>com inteligência de dados.</em>
       </h1>
-      <p>
-        Painel de lucratividade conectado ao Bling. Acompanhe margem real por
-        canal, identifique produtos no prejuízo e decida onde vale a pena
-        investir.
-      </p>
-
-      <div class="pontos">
-        <div class="ponto">
-          <span class="ponto-ico" aria-hidden="true">◧</span>
-          <span>Margem de contribuição real, após custo, comissão, frete e imposto</span>
-        </div>
-        <div class="ponto">
-          <span class="ponto-ico" aria-hidden="true">◆</span>
-          <span>Comparação entre Mercado Livre, Shopee e TikTok Shop</span>
-        </div>
-        <div class="ponto">
-          <span class="ponto-ico" aria-hidden="true">▲</span>
-          <span>Alerta de produtos vendendo abaixo do custo</span>
-        </div>
-      </div>
     </div>
 
     <div class="marca-rodape">Dados sincronizados do ERP Bling</div>
@@ -104,7 +128,7 @@ header('X-Robots-Tag: noindex, nofollow');
 
       <?php if ($erro !== ''): ?>
         <div class="erro" role="alert">
-          <span class="erro-ico" aria-hidden="true">!</span>
+          <svg class="icone erro-ico" aria-hidden="true"><use href="#i-alerta"/></svg>
           <span><?= htmlspecialchars($erro, ENT_QUOTES) ?></span>
         </div>
       <?php endif; ?>
@@ -116,7 +140,7 @@ header('X-Robots-Tag: noindex, nofollow');
         <div class="entrada">
           <input type="text" id="login" name="login" placeholder="seu usuário"
                  autocomplete="username" required autofocus>
-          <span class="ico" aria-hidden="true">◍</span>
+          <svg class="icone ico" aria-hidden="true"><use href="#i-usuario"/></svg>
         </div>
       </div>
 
@@ -125,13 +149,17 @@ header('X-Robots-Tag: noindex, nofollow');
         <div class="entrada">
           <input type="password" id="senha" name="senha" placeholder="sua senha"
                  autocomplete="current-password" required>
-          <span class="ico" aria-hidden="true">◈</span>
-          <button type="button" class="ver-senha" id="ver-senha"
-                  aria-label="Mostrar senha">mostrar</button>
+          <svg class="icone ico" aria-hidden="true"><use href="#i-cadeado"/></svg>
+          <button type="button" class="ver-senha" id="ver-senha" aria-label="Mostrar senha">
+            <svg class="icone" aria-hidden="true"><use id="ver-senha-ico" href="#i-olho"/></svg>
+          </button>
         </div>
       </div>
 
-      <button type="submit" class="btn-entrar">Entrar no painel</button>
+      <button type="submit" class="btn-entrar">
+        <span>Entrar no painel</span>
+        <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
+      </button>
 
       <p class="rodape-form">
         Acesso restrito à equipe. Após 8 tentativas incorretas, novas tentativas
@@ -147,11 +175,12 @@ header('X-Robots-Tag: noindex, nofollow');
   // o acesso por 15 minutos.
   (function () {
     var botao = document.getElementById('ver-senha');
+    var icone = document.getElementById('ver-senha-ico');
     var campo = document.getElementById('senha');
     botao.addEventListener('click', function () {
       var oculta = campo.type === 'password';
       campo.type = oculta ? 'text' : 'password';
-      botao.textContent = oculta ? 'ocultar' : 'mostrar';
+      icone.setAttribute('href', oculta ? '#i-olho-fechado' : '#i-olho');
       botao.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
       campo.focus();
     });
