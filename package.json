@@ -23,7 +23,10 @@
     "api": "npm run dev -w @alvorada/api",
     "worker": "npm run dev -w @alvorada/worker",
     "backfill": "npm run backfill -w @alvorada/worker",
-    "test": "npm run test -w @alvorada/shared && npm run test -w @alvorada/bling"
+    "test": "npm run test -w @alvorada/shared && npm run test -w @alvorada/bling",
+    "doutor": "node scripts/doutor.mjs",
+    "painel": "node scripts/servir-local.mjs",
+    "publicar:interface": "node scripts/publicar-interface.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

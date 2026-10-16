@@ -1,0 +1,11 @@
+# Normaliza o fim de linha no repositorio.
+#
+# Sem isto, o Git no Windows converte LF para CRLF ao gravar e avisa a cada
+# comando, poluindo a saida e escondendo mudancas reais no meio dos avisos.
+* text=auto eol=lf
+
+# Binarios nao passam por conversao.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

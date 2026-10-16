@@ -12,8 +12,12 @@ export {
 
 export {
   classificarCanal,
+  classificarPorIntermediador,
+  CNPJ_MARKETPLACE,
   situacaoContaNaAnalise,
-  SITUACOES_FORA_DA_ANALISE,
+  nomeDaSituacao,
+  SITUACAO_VALOR,
+  SITUACAO_ID,
   type TipoCanal,
 } from './canais.js';
 

@@ -27,3 +27,10 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Segredos do painel (hashes de senha e chave da ponte OAuth)
+web/config.php
+
+# Clone vazio do proprio repositorio, criado por engano dentro do projeto.
+# Nao apagamos para nao mexer em algo seu; pode remover a pasta com seguranca.
+/grupoalvorada/

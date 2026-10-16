@@ -57,6 +57,35 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_SENHA: z.string().optional(),
   ADMIN_NOME: z.string().default('Administrador'),
+
+  // --- Publicacao do painel na HostGator ---
+  // O servidor envia os resultados por FTPS. Sao conexoes de SAIDA, por isso
+  // nada precisa ser exposto na rede do servidor.
+  FTP_HOST: z.string().optional(),
+  FTP_USER: z.string().optional(),
+  FTP_SENHA: z.string().optional(),
+  /** Pasta de destino no servidor da HostGator. */
+  FTP_DIR: z.string().default('/public_html/painel'),
+  /**
+   * FTPS (TLS) por padrao. So desligue se a hospedagem nao suportar: com FTP
+   * puro, a senha trafega em texto claro pela internet.
+   */
+  FTP_SEGURO: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Periodicidade da publicacao do painel. */
+  PUBLICAR_CRON: z.string().default('*/30 * * * *'),
+  /** Quantos meses de historico entram na analise publicada. */
+  ANALISE_MESES: z.coerce.number().int().positive().max(60).default(12),
+
+  // --- Ponte de autorizacao OAuth ---
+  // O Bling exige um redirect HTTPS publico e o servidor nao tem um. A pagina
+  // oauth-callback.php na hospedagem recebe o code e o worker o busca aqui.
+  /** URL completa do oauth-callback.php publicado na hospedagem. */
+  OAUTH_PONTE_URL: z.string().url().optional(),
+  /** Segredo compartilhado com o PHP. Precisa ser identico nos dois lados. */
+  OAUTH_PONTE_CHAVE: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

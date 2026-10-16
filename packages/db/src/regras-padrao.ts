@@ -69,6 +69,17 @@ const SHOPEE: RegraPadrao[] = [
   },
 ];
 
+const TIKTOK_SHOP: RegraPadrao[] = [
+  {
+    descricao: 'TikTok Shop - comissao padrao',
+    percentual: 12,
+    taxaFixa: 0,
+    valorMinimo: null,
+    valorMaximo: null,
+    prioridade: 5,
+  },
+];
+
 const AMAZON: RegraPadrao[] = [
   {
     descricao: 'Amazon - comissao padrao',
@@ -94,6 +105,7 @@ const MAGALU: RegraPadrao[] = [
 export const REGRAS_PADRAO: Record<CanalTipo, RegraPadrao[]> = {
   MERCADO_LIVRE,
   SHOPEE,
+  TIKTOK_SHOP,
   AMAZON,
   MAGALU,
   // Loja propria nao tem comissao de marketplace. Taxa de meio de pagamento, se

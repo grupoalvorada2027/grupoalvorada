@@ -4,7 +4,12 @@ import {
   aplicarRegrasPadrao,
   type CanalTipo,
 } from '@alvorada/db';
-import { classificarCanal, situacaoContaNaAnalise } from '@alvorada/shared';
+import {
+  classificarCanal,
+  situacaoContaNaAnalise,
+  nomeDaSituacao,
+  classificarPorIntermediador,
+} from '@alvorada/shared';
 import type { PedidoDetalhe, Produto, ProdutoCustoApi } from '@alvorada/bling';
 
 /**
@@ -62,6 +67,7 @@ export function parseDataBling(valor: string | null | undefined): Date | null {
 export async function garantirCanal(
   empresaId: number,
   loja: { id?: string; nome?: string } | undefined,
+  intermediador?: { cnpj?: unknown; nomeUsuario?: unknown } | null,
 ): Promise<number | null> {
   if (!loja?.id) return null;
 
@@ -72,8 +78,16 @@ export async function garantirCanal(
 
   if (existente) return existente.id;
 
-  const nome = loja.nome?.trim() || `Loja ${loja.id}`;
-  const tipo = classificarCanal(nome) as CanalTipo;
+  // O intermediador identifica o marketplace pelo CNPJ, que e o unico sinal
+  // confiavel: a loja vem apenas como id numerico, sem nome.
+  const porIntermediador = classificarPorIntermediador(
+    typeof intermediador?.cnpj === 'string' ? intermediador.cnpj : null,
+    typeof intermediador?.nomeUsuario === 'string' ? intermediador.nomeUsuario : null,
+    loja.id,
+  );
+
+  const nome = porIntermediador?.nome ?? loja.nome?.trim() ?? `Loja ${loja.id}`;
+  const tipo = (porIntermediador?.tipo ?? classificarCanal(nome)) as CanalTipo;
 
   const criado = await prisma.canal.create({
     data: { empresaId, blingId: loja.id, nome, tipo },
@@ -258,6 +272,24 @@ export function extrairFrete(detalhe: PedidoDetalhe): {
   freteCliente: number;
   freteVendedor: number;
 } {
+  // FONTE PRIMARIA: `taxas.custoFrete`.
+  //
+  // Confirmado em pedido real do Mercado Livre (11/10/2026): o frete que o
+  // vendedor paga chega em `taxas.custoFrete` (R$ 75,65 no pedido conferido),
+  // enquanto `transporte.frete` vem ZERO. Em marketplace e assim mesmo: o canal
+  // desconta o frete do repasse, nao cobra do emitente da nota.
+  //
+  // Ler apenas `transporte.frete` faria o frete sumir da analise e a margem sair
+  // otimista justamente nos pedidos de maior peso - que sao os que mais corroem
+  // o lucro.
+  const taxas = detalhe.taxas as Record<string, unknown> | undefined;
+  const custoFreteTaxa = lerNumero(taxas?.custoFrete);
+
+  if (custoFreteTaxa !== null && custoFreteTaxa !== 0) {
+    return { freteCliente: 0, freteVendedor: Math.abs(custoFreteTaxa) };
+  }
+
+  // FONTE SECUNDARIA: bloco de transporte, usado em venda propria com NF.
   const transporte = detalhe.transporte;
   const valorFrete = Number(transporte?.frete ?? 0) || 0;
 
@@ -265,14 +297,24 @@ export function extrairFrete(detalhe: PedidoDetalhe): {
     return { freteCliente: 0, freteVendedor: 0 };
   }
 
+  // Convencao da NF-e: 0 = por conta do remetente (vendedor).
   const porConta = transporte?.fretePorConta;
   const codigo = porConta === null || porConta === undefined ? null : String(porConta);
-
   const porContaDoVendedor = codigo === '0' || codigo === 'R';
 
   return porContaDoVendedor
     ? { freteCliente: 0, freteVendedor: valorFrete }
     : { freteCliente: valorFrete, freteVendedor: 0 };
+}
+
+/** Le um numero que pode vir como number ou string. */
+function lerNumero(valor: unknown): number | null {
+  if (typeof valor === 'number' && Number.isFinite(valor)) return valor;
+  if (typeof valor === 'string') {
+    const n = Number(valor.replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export interface TaxaExtraida {
@@ -301,27 +343,25 @@ export function extrairTaxasReais(detalhe: PedidoDetalhe): TaxaExtraida[] {
   const bruto = detalhe.taxas;
   if (!bruto || typeof bruto !== 'object') return [];
 
+  const objeto = bruto as Record<string, unknown>;
   const taxas: TaxaExtraida[] = [];
 
-  const lerNumero = (valor: unknown): number | null => {
-    if (typeof valor === 'number' && Number.isFinite(valor)) return valor;
-    if (typeof valor === 'string') {
-      const n = Number(valor.replace(',', '.'));
-      return Number.isFinite(n) ? n : null;
-    }
-    return null;
-  };
-
-  const objeto = bruto as Record<string, unknown>;
-
-  // Formato esperado: { taxaComissao, custoFrete, taxaFixa, ... }
+  // Formato confirmado em pedido real do Mercado Livre (11/10/2026):
+  //   { "taxaComissao": 32.24, "custoFrete": 75.65, "valorBase": 307 }
+  //
+  // `custoFrete` NAO entra aqui: ele e tratado por extrairFrete e vira
+  // `freteVendedor` no pedido. Incluir nos dois lugares cobraria o frete duas
+  // vezes e produziria margem menor que a real.
+  //
+  // `valorBase` tambem fica de fora: e a base de calculo da comissao, nao uma
+  // cobranca.
   const mapa: Array<[string, TaxaExtraida['tipo']]> = [
     ['taxaComissao', 'COMISSAO'],
     ['comissao', 'COMISSAO'],
-    ['custoFrete', 'FRETE'],
-    ['taxaFrete', 'FRETE'],
     ['taxaFixa', 'TARIFA_FIXA'],
+    ['tarifaFixa', 'TARIFA_FIXA'],
     ['taxaAntecipacao', 'ANTECIPACAO'],
+    ['taxaParcelamento', 'ANTECIPACAO'],
   ];
 
   for (const [chave, tipo] of mapa) {
@@ -424,7 +464,11 @@ export async function salvarPedido(
   opcoes: { versaoEvento?: Date | null } = {},
 ): Promise<ResultadoSalvarPedido> {
   const data = parseDataBling(detalhe.data) ?? new Date();
-  const canalId = await garantirCanal(empresaId, detalhe.loja);
+  const canalId = await garantirCanal(
+    empresaId,
+    detalhe.loja,
+    (detalhe as { intermediador?: { cnpj?: unknown; nomeUsuario?: unknown } }).intermediador,
+  );
 
   const existente = await prisma.pedido.findUnique({
     where: { empresaId_blingId: { empresaId, blingId: detalhe.id } },
@@ -449,10 +493,14 @@ export async function salvarPedido(
   }
 
   const { freteCliente, freteVendedor } = extrairFrete(detalhe);
-  const situacaoNome =
-    detalhe.situacao?.valor !== undefined
-      ? String(detalhe.situacao.valor)
-      : null;
+
+  // O Bling manda a situacao como dois numeros, sem nome. Traduzimos na
+  // gravacao para que o banco guarde algo legivel e os relatorios nao precisem
+  // decodificar numero.
+  const situacaoNome = nomeDaSituacao(
+    detalhe.situacao?.id ?? null,
+    detalhe.situacao?.valor ?? null,
+  );
 
   const dadosPedido = {
     empresaId,
@@ -464,7 +512,10 @@ export async function salvarPedido(
     dataSaida: parseDataBling(detalhe.dataSaida),
     situacaoId: detalhe.situacao?.id ?? null,
     situacaoNome,
-    considerarNaAnalise: situacaoContaNaAnalise(situacaoNome),
+    considerarNaAnalise: situacaoContaNaAnalise(
+      detalhe.situacao?.id ?? null,
+      detalhe.situacao?.valor ?? null,
+    ),
     totalProdutos: dec(detalhe.totalProdutos),
     totalPedido: dec(detalhe.total),
     desconto: dec(detalhe.desconto?.valor),

@@ -82,6 +82,7 @@ model OAuthToken {
 enum CanalTipo {
   MERCADO_LIVRE
   SHOPEE
+  TIKTOK_SHOP
   AMAZON
   MAGALU
   LOJA_PROPRIA

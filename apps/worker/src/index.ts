@@ -6,6 +6,7 @@ import {
   sincronizarIncremental,
   verificarSaudeToken,
 } from './jobs/sync.js';
+import { publicarPainel } from './jobs/publicar.js';
 
 /**
  * Processo residente do worker.
@@ -82,8 +83,22 @@ async function main(): Promise<void> {
   });
   cron.schedule(ctx.env.TOKEN_REFRESH_CRON, tarefaToken);
 
+  // Publicacao do painel na hospedagem.
+  //
+  // E assim que o resultado chega ate voce de qualquer lugar sem expor este
+  // servidor: ele empurra o JSON calculado para a HostGator, em conexao de
+  // saida. Nenhuma porta precisa estar aberta aqui.
+  const tarefaPublicar = semSobreposicao('publicar', ctx, async () => {
+    const r = await publicarPainel(ctx);
+    if (!r.enviado) {
+      ctx.logger.warn({ motivo: r.motivoNaoEnvio }, 'Painel gerado mas nao publicado');
+    }
+  });
+  cron.schedule(ctx.env.PUBLICAR_CRON, tarefaPublicar);
+
   // Primeira passada imediata, para nao esperar o primeiro tique do cron.
   await tarefaWebhooks();
+  await tarefaPublicar();
 
   const encerrar = (sinal: string) => {
     ctx.logger.info({ sinal }, 'Encerrando worker');

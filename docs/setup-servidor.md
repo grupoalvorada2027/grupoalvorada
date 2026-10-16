@@ -59,10 +59,32 @@ Em **Central de Extensões → Área do Integrador → Criar aplicativo**:
 
 - **Redirect URI**: `https://api.seudominio.com.br/oauth/callback` — tem de ser
   idêntica ao `BLING_REDIRECT_URI` do `.env`, inclusive sem barra no final.
-- **Escopos**: pedidos de venda, produtos, estoque, contatos, notas fiscais.
-  O Bling usa os escopos marcados no cadastro e ignora o parâmetro `scope` enviado
-  na URL, então marcar aqui é o que vale.
 - Guarde `client_id` e `client_secret` no `.env`.
+
+### Escopos
+
+O Bling usa os escopos marcados no cadastro do aplicativo e ignora o parâmetro
+`scope` enviado na URL de autorização — marcar aqui é o que vale.
+
+O sistema **apenas lê** do Bling; não existe nenhuma chamada de escrita no código.
+Portanto, ao expandir cada escopo (seta à direita), marque **somente "visualizar"**.
+Permissão de escrita não traria benefício algum e deixaria o aplicativo capaz de
+alterar ou excluir pedidos e produtos no ERP de produção caso o `client_secret`
+vazasse.
+
+Marque:
+
+| Escopo | Usado para |
+|---|---|
+| Pedidos de Venda | `GET /pedidos/vendas` e `/pedidos/vendas/{id}` — receita, itens, frete, situação, loja |
+| Produtos | `GET /produtos`, `/produtos/{id}` e `/produtos/custo` — SKU, nome e custo |
+| Clientes e Fornecedores | nome e documento do contato gravados no pedido |
+| Categoria de Produtos | análise por categoria; comissão de marketplace varia por categoria |
+| Empresas (se houver) | `GET /empresas/me`, para identificar a empresa autorizada (tem fallback) |
+
+Não marque os demais. Adicionar um escopo depois é barato: basta editar o
+aplicativo e reautorizar em `/oauth/iniciar`. Não vale conceder permissão extra
+"por precaução".
 
 ### Ativar a importação de taxas do marketplace
 

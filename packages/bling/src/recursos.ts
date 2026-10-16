@@ -143,6 +143,15 @@ export const pedidoDetalheSchema = z
     desconto: descontoSchema.optional().nullable(),
     transporte: transporteSchema.optional().nullable(),
     itens: z.array(itemPedidoSchema).default([]),
+    /**
+     * Identifica o marketplace pelo CNPJ. E o unico sinal confiavel de qual
+     * canal gerou a venda - a loja vem so como id numerico, sem nome.
+     */
+    intermediador: z
+      .object({ cnpj: z.string().optional(), nomeUsuario: z.string().optional() })
+      .passthrough()
+      .optional()
+      .nullable(),
     /** Taxas do marketplace podem aparecer aqui, conforme a loja. */
     taxas: z.unknown().optional(),
     tributacao: z.unknown().optional(),
