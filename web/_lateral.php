@@ -61,6 +61,9 @@ $ativo = static fn (string $p): string => ($pagina ?? '') === $p ? ' ativo' : ''
     <symbol id="i-info" viewBox="0 0 24 24">
       <path d="M12 10.5v8"/><path d="M12 5.8h.01"/>
     </symbol>
+    <symbol id="i-perfil" viewBox="0 0 24 24">
+      <circle cx="12" cy="8.2" r="3.7"/><path d="M4.8 20c.9-3.6 3.8-5.6 7.2-5.6s6.3 2 7.2 5.6"/>
+    </symbol>
     <symbol id="i-sair" viewBox="0 0 24 24">
       <path d="M14.5 4.5h3.2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3.2"/><path d="M10 16.5 5.5 12 10 7.5"/><path d="M5.5 12H15"/>
     </symbol>
@@ -97,6 +100,11 @@ $ativo = static fn (string $p): string => ($pagina ?? '') === $p ? ' ativo' : ''
     <span class="menu-item desabilitado">
       <svg class="icone" aria-hidden="true"><use href="#i-dinheiro"/></svg> Fluxo de caixa <span class="menu-tag">em breve</span>
     </span>
+
+    <div class="menu-grupo">Conta</div>
+    <a class="menu-item<?= $ativo('conta') ?>" href="conta.php">
+      <svg class="icone" aria-hidden="true"><use href="#i-perfil"/></svg> Minha conta
+    </a>
 
     <?php if (($usuario['papel'] ?? '') === 'admin'): ?>
       <div class="menu-grupo">Administração</div>

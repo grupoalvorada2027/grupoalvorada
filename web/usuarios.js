@@ -27,3 +27,34 @@
     });
   }
 })();
+
+// Botões "Copiar". A senha provisória e os códigos de recuperação aparecem uma
+// única vez; copiar à mão convida a erro de transcrição.
+(function () {
+  'use strict';
+  document.addEventListener('click', function (e) {
+    var botao = e.target.closest('[data-alvo]');
+    if (!botao) return;
+
+    var alvo = document.getElementById(botao.getAttribute('data-alvo'));
+    if (!alvo) return;
+
+    var texto = alvo.tagName === 'CODE'
+      ? alvo.textContent.trim()
+      : Array.prototype.map.call(alvo.querySelectorAll('code'), function (c) {
+          return c.textContent.trim();
+        }).join('\n');
+
+    var original = botao.textContent;
+    function feito(ok) {
+      botao.textContent = ok ? 'Copiado' : 'Copie à mão';
+      setTimeout(function () { botao.textContent = original; }, 2000);
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).then(function () { feito(true); }, function () { feito(false); });
+    } else {
+      feito(false);
+    }
+  });
+})();

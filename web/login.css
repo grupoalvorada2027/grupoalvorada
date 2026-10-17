@@ -344,3 +344,32 @@ body {
 .area-google iframe { margin: 0 !important; }
 
 #aviso-dinamico { margin-top: 18px; margin-bottom: 0; }
+
+/* ===================== FORÇA DA SENHA ===================== */
+
+.forca { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.forca-barra {
+  flex: 1; height: 5px; border-radius: 3px; background: var(--cinza-campo); overflow: hidden;
+}
+.forca-barra span { display: block; height: 100%; width: 0; border-radius: 3px; transition: width .2s ease, background .2s ease; }
+.forca-barra .nivel-1 { background: #CF0C0C; }
+.forca-barra .nivel-2 { background: #F29F05; }
+.forca-barra .nivel-3 { background: #1E9E3C; }
+.forca-barra .nivel-4 { background: #09A603; }
+#forca-texto { font-size: 0.76rem; color: var(--txt-2); white-space: nowrap; }
+
+/* Código do segundo fator: dígitos espaçados, para conferir ao digitar. */
+.campo-codigo {
+  letter-spacing: 0.42em; font-size: 1.12rem !important; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 42px; padding: 0 16px; border-radius: var(--raio); cursor: pointer;
+  font: inherit; font-size: 0.9rem; font-weight: 600; border: 1px solid transparent;
+  text-decoration: none;
+}
+.btn-primario { background: var(--vermelho); color: #fff; }
+.btn-primario:hover { background: var(--vermelho-hover); }
+.btn-secundario { background: var(--cinza-campo); color: var(--txt); border-color: var(--borda); }
