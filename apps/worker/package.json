@@ -11,7 +11,8 @@
     "backfill": "tsx src/scripts/rodar-backfill.ts",
     "inspecionar": "tsx src/scripts/inspecionar.ts",
     "autorizar": "tsx src/scripts/autorizar.ts",
-    "publicar": "tsx src/scripts/rodar-publicacao.ts"
+    "publicar": "tsx src/scripts/rodar-publicacao.ts",
+    "inspecionar:mp": "tsx src/scripts/inspecionar-mp.ts"
   },
   "dependencies": {
     "@alvorada/bling": "*",
