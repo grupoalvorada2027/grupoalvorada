@@ -33,7 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erro = 'Sessão expirada. Recarregue a página e repita a ação.';
     } else {
         $acao  = (string) ($_POST['acao'] ?? '');
-        $email = normalizarEmail((string) ($_POST['email'] ?? ''));
+        $emailDigitado = strtolower(trim((string) ($_POST['email'] ?? '')));
+        // Chave canônica: no Gmail, com ou sem ponto é a mesma conta.
+        $email = normalizarEmail($emailDigitado);
         $papel = (string) ($_POST['papel'] ?? 'operador');
 
         $usuarios = carregarUsuarios();
@@ -49,11 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $erro = 'Este e-mail já está cadastrado.';
             } else {
                 $usuarios[$email] = [
-                    'nome' => $email, 'papel' => $papel, 'status' => 'ativo',
+                    'email' => $emailDigitado, 'nome' => $emailDigitado, 'papel' => $papel, 'status' => 'ativo',
                     'criadoEm' => time(), 'liberadoPor' => $usuario['login'],
                 ];
                 salvarUsuarios($usuarios);
-                $mensagem = "$email liberado como " . PAPEIS[$papel] . '. Já pode entrar com o Google.';
+                $mensagem = "$emailDigitado liberado como " . PAPEIS[$papel] . '. Já pode entrar com o Google.';
             }
         } elseif ($alvo === null) {
             $erro = 'Usuário não encontrado.';
@@ -197,7 +199,7 @@ $pagina = 'usuarios';
             <div class="linha-usuario">
               <div class="usr-id">
                 <strong><?= $h($u['nome'] ?? $email) ?></strong>
-                <span><?= $h($email) ?></span>
+                <span><?= $h($u['email'] ?? $email) ?></span>
                 <small>Pedido em <?= quando($u['criadoEm'] ?? null) ?></small>
               </div>
               <form method="post" class="usr-acoes">
@@ -220,7 +222,7 @@ $pagina = 'usuarios';
           <div class="linha-usuario">
             <div class="usr-id">
               <strong><?= $h($u['nome'] ?? $email) ?><?= $proprio ? ' <em class="voce">você</em>' : '' ?></strong>
-              <span><?= $h($email) ?></span>
+              <span><?= $h($u['email'] ?? $email) ?></span>
               <small>Último acesso: <?= quando($u['ultimoAcesso'] ?? null) ?></small>
             </div>
             <?php if ($proprio): ?>
@@ -258,7 +260,7 @@ $pagina = 'usuarios';
             <div class="linha-usuario">
               <div class="usr-id">
                 <strong><?= $h($u['nome'] ?? $email) ?></strong>
-                <span><?= $h($email) ?></span>
+                <span><?= $h($u['email'] ?? $email) ?></span>
               </div>
               <form method="post" class="usr-acoes">
                 <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">

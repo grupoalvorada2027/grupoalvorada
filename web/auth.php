@@ -54,7 +54,16 @@ function adminsIniciais(): array
     if (!defined('ADMINS_INICIAIS') || !is_array(ADMINS_INICIAIS)) {
         return [];
     }
-    return array_map(static fn ($e) => strtolower(trim((string) $e)), ADMINS_INICIAIS);
+    // Devolve [forma canônica => como foi escrito], para gravar o e-mail
+    // legível no cadastro e comparar pela forma canônica.
+    $lista = [];
+    foreach (ADMINS_INICIAIS as $e) {
+        $e = strtolower(trim((string) $e));
+        if ($e !== '') {
+            $lista[normalizarEmail($e)] = $e;
+        }
+    }
+    return $lista;
 }
 
 // ============================================================
@@ -83,7 +92,29 @@ function carregarUsuarios(): array
     fclose($h);
 
     $dados = json_decode((string) $conteudo, true);
-    return is_array($dados) ? $dados : [];
+    if (!is_array($dados)) {
+        return [];
+    }
+
+    // Reindexa pela forma canônica. Se duas entradas forem a mesma pessoa
+    // (gravadas antes da normalização), fica a de maior acesso: ativo vence
+    // pendente, e administrador vence os demais papéis.
+    $peso = static fn (array $u): int =>
+        (($u['status'] ?? '') === 'ativo' ? 10 : 0)
+        + (['admin' => 3, 'gestor' => 2, 'operador' => 1][$u['papel'] ?? ''] ?? 0);
+
+    $normalizados = [];
+    foreach ($dados as $chave => $u) {
+        if (!is_array($u)) {
+            continue;
+        }
+        $k = normalizarEmail((string) $chave);
+        $u['email'] = $u['email'] ?? (string) $chave;
+        if (!isset($normalizados[$k]) || $peso($u) > $peso($normalizados[$k])) {
+            $normalizados[$k] = $u;
+        }
+    }
+    return $normalizados;
 }
 
 /**
@@ -103,9 +134,35 @@ function salvarUsuarios(array $usuarios): void
     rename($tmp, $arq);
 }
 
+/**
+ * Forma canônica do e-mail, usada como chave do cadastro.
+ *
+ * No Gmail, pontos no nome não importam e "+qualquercoisa" é apelido:
+ * grupo.alvorada2027, grupoalvorada2027 e grupoalvorada2027+bi caem todos na
+ * mesma caixa. O Google devolve o e-mail como a conta foi criada (com o ponto),
+ * e o administrador pode ter digitado sem - sem esta normalização, a mesma
+ * pessoa apareceria como desconhecida e cairia na fila de aprovação.
+ *
+ * Só vale para gmail.com/googlemail.com. Em outros domínios ponto é caractere
+ * significativo e o e-mail é mantido como veio (em minúsculas).
+ */
 function normalizarEmail(string $email): string
 {
-    return strtolower(trim($email));
+    $email = strtolower(trim($email));
+    $arroba = strrpos($email, '@');
+    if ($arroba === false) {
+        return $email; // login de reserva por senha ("felipe"), não é e-mail
+    }
+
+    $local   = substr($email, 0, $arroba);
+    $dominio = substr($email, $arroba + 1);
+
+    if ($dominio === 'gmail.com' || $dominio === 'googlemail.com') {
+        $local   = str_replace('.', '', explode('+', $local, 2)[0]);
+        $dominio = 'gmail.com';
+    }
+
+    return $local . '@' . $dominio;
 }
 
 /**
@@ -116,13 +173,11 @@ function normalizarEmail(string $email): string
 function garantirAdminsIniciais(array &$usuarios): bool
 {
     $mudou = false;
-    foreach (adminsIniciais() as $email) {
-        if ($email === '') {
-            continue;
-        }
+    foreach (adminsIniciais() as $email => $escrito) {
         if (!isset($usuarios[$email])) {
             $usuarios[$email] = [
-                'nome'     => $email,
+                'email'    => $escrito,
+                'nome'     => $escrito,
                 'papel'    => 'admin',
                 'status'   => 'ativo',
                 'criadoEm' => time(),
@@ -138,9 +193,12 @@ function garantirAdminsIniciais(array &$usuarios): bool
  *
  * @return array{resultado: string, usuario?: array}
  */
-function registrarAcessoGoogle(string $email, string $nome): array
+function registrarAcessoGoogle(string $emailGoogle, string $nome): array
 {
-    $email = normalizarEmail($email);
+    // O Google devolve o e-mail exatamente como a conta foi criada; é essa a
+    // forma que guardamos para exibir. A chave é a forma canônica.
+    $emailGoogle = strtolower(trim($emailGoogle));
+    $email = normalizarEmail($emailGoogle);
     $usuarios = carregarUsuarios();
     garantirAdminsIniciais($usuarios);
 
@@ -150,7 +208,8 @@ function registrarAcessoGoogle(string $email, string $nome): array
         $pendentes = array_filter($usuarios, static fn ($x) => ($x['status'] ?? '') === 'pendente');
         if (count($pendentes) < MAX_PENDENTES) {
             $usuarios[$email] = [
-                'nome'     => $nome !== '' ? $nome : $email,
+                'email'    => $emailGoogle,
+                'nome'     => $nome !== '' ? $nome : $emailGoogle,
                 'papel'    => 'operador',
                 'status'   => 'pendente',
                 'criadoEm' => time(),
@@ -169,9 +228,11 @@ function registrarAcessoGoogle(string $email, string $nome): array
 
     // Atualiza nome e ultimo acesso. O nome do Google substitui o e-mail
     // provisorio que o administrador inicial recebe ao ser criado.
-    if ($nome !== '' && ($u['nome'] ?? '') === $email) {
+    $nomeAtual = (string) ($u['nome'] ?? '');
+    if ($nome !== '' && ($nomeAtual === '' || str_contains($nomeAtual, '@'))) {
         $u['nome'] = $nome;
     }
+    $u['email'] = $emailGoogle;
     $u['ultimoAcesso'] = time();
     $usuarios[$email] = $u;
     salvarUsuarios($usuarios);

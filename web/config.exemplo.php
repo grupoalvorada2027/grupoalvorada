@@ -39,4 +39,4 @@ const GOOGLE_REDIRECT_URI  = 'https://grupoalvorada1029.com.br/google-callback.p
 
 // E-mails que entram como administrador no primeiro acesso, sem aprovacao.
 // Os demais pedem acesso e aguardam um administrador liberar na tela Usuarios.
-const ADMINS_INICIAIS = ['grupoalvorada2027@gmail.com'];
+const ADMINS_INICIAIS = ['grupo.alvorada2027@gmail.com'];
