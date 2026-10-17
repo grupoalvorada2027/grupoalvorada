@@ -33,6 +33,13 @@ $parametros = http_build_query([
     'response_type' => 'code',
     // So identidade: nome e e-mail. Nenhum acesso a Gmail, Drive ou agenda.
     'scope'         => 'openid email profile',
+    // A resposta volta depois do "#" da URL, que o navegador nunca envia ao
+    // servidor. Necessário por causa do ModSecurity da HostGator: o Google
+    // devolve iss=https://accounts.google.com, e o firewall bloqueia (erro 406)
+    // qualquer parâmetro cujo valor comece com https://. google-retorno.js lê o
+    // fragmento e reenvia só code e state. O iss continua sendo conferido -
+    // dentro do token assinado, em google-callback.php.
+    'response_mode' => 'fragment',
     'state'         => $_SESSION['google_state'],
     'nonce'         => $_SESSION['google_nonce'],
     // Sempre mostra a escolha de conta: em computador compartilhado, evita

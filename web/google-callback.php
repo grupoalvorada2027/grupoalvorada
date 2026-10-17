@@ -33,6 +33,23 @@ if (!googleConfigurado()) {
     voltarComAviso('indisponivel');
 }
 
+// --- Etapa 1: ponte do fragmento -------------------------------------------
+// O Google volta com tudo depois do "#" (response_mode=fragment), que não chega
+// aqui. Servimos uma página mínima cujo script lê o fragmento e chama esta
+// mesma URL de novo, agora com code e state na query (e marcada com retorno=1).
+// Nada da sessão é consumido nesta etapa.
+if (!isset($_GET['retorno'])) {
+    header('Cache-Control: no-store');
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+       . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+       . '<title>Entrando…</title></head><body>'
+       . '<noscript>Este login precisa de JavaScript ativado.</noscript>'
+       . '<script src="google-retorno.js"></script></body></html>';
+    exit;
+}
+
+// --- Etapa 2: conferência --------------------------------------------------
 iniciarSessao();
 
 $stateEsperado = (string) ($_SESSION['google_state'] ?? '');
