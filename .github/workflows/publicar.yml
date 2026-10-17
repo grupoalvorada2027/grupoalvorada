@@ -61,15 +61,19 @@ jobs:
           local-dir: ./web/
           server-dir: ./
           # Arquivos que o deploy NUNCA pode tocar:
-          #   config.php  - segredos, existe só no servidor
-          #   dados.json  - publicado pelo worker a cada sincronização
-          #   .ponte-*    - troca do OAuth, some em segundos
-          #   .tentativas - controle de força bruta do login
+          #   config.php   - segredos, existe só no servidor
+          #   dados.json   - publicado pelo worker a cada sincronização
+          #   .ponte-*     - troca do OAuth, some em segundos
+          #   .tentativas  - controle de força bruta do login
+          #   instalar.php - cria o primeiro administrador; vai à mão, uma vez
+          #                  por ambiente, junto com o config.php. Fora da lista
+          #                  o deploy o reenviaria depois de ele se apagar.
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/**
             config.php
+            instalar.php
             dados.json
             .ponte-*.json
             .tentativas.json

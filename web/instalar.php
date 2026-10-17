@@ -24,6 +24,7 @@ $usuarios = carregarUsuarios();
 $jaInstalado = $usuarios !== [];
 $erro = '';
 $pronto = false;
+$sobrou = false;
 
 if (!$jaInstalado && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrfValido($_POST['csrf'] ?? null)) {
@@ -47,6 +48,12 @@ if (!$jaInstalado && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'criadoPor'       => 'instalacao',
         ]);
         $pronto = true;
+
+        // Apaga-se sozinho. As tres travas acima ja o tornam inofensivo depois
+        // da primeira conta, mas ferramenta de instalacao que fica no ar e
+        // superficie exposta sem motivo. Se a hospedagem nao permitir remover,
+        // $sobrou avisa para apagar a mao.
+        $sobrou = !@unlink(__FILE__);
     }
 }
 
@@ -87,10 +94,15 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES);
       definida no <code>config.php</code>.
     </p>
     <p>
-      Agora: <strong>apague o <code>instalar.php</code> do servidor</strong> e
-      limpe o valor de <code>SENHA_PRIMEIRO_ADMIN</code> no <code>config.php</code> —
-      a senha já está guardada embaralhada no cadastro e não precisa mais ficar
-      em texto por lá.
+      <?php if ($sobrou): ?>
+        Este instalador tentou se apagar e não conseguiu.
+        <strong>Apague o <code>instalar.php</code> do servidor à mão.</strong>
+      <?php else: ?>
+        Este instalador já se apagou do servidor.
+      <?php endif; ?>
+      Falta limpar o valor de <code>SENHA_PRIMEIRO_ADMIN</code> no
+      <code>config.php</code>: a senha já está guardada embaralhada no cadastro e
+      não precisa mais ficar em texto por lá.
     </p>
     <p><a class="btn btn-primario" href="login.php">Entrar</a></p>
 

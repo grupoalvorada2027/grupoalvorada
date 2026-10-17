@@ -109,13 +109,32 @@ git push
 
 ## O que a Action nunca toca
 
-Três arquivos ficam de fora da publicação por motivos diferentes:
+Alguns arquivos ficam de fora da publicação, cada um por um motivo diferente:
 
 | Arquivo | Por quê |
 |---|---|
 | `config.php` | Guarda hashes de senha e a chave da ponte OAuth. Existe só no servidor, nunca no Git. |
 | `dados.json` | É publicado pelo worker a cada sincronização. Se o deploy o sobrescrevesse, o painel voltaria a mostrar dados velhos. |
 | `.ponte-*.json` | Troca do OAuth, vive segundos. |
+| `.usuarios.json`, `.tentativas.json` | Cadastro de acesso e controle de força bruta. São estado do servidor. |
+| `instalar.php` | Cria o primeiro administrador e **se apaga sozinho** ao terminar. Se o deploy o reenviasse, ele voltaria depois de cada publicação. Sobe à mão, uma vez por ambiente. |
+
+### Primeiro acesso de um ambiente novo
+
+Só um administrador cria contas, mas num ambiente novo não existe administrador
+nenhum. A sequência, depois de colocar o `config.php` no servidor com
+`EMAIL_PRIMEIRO_ADMIN`, `NOME_PRIMEIRO_ADMIN` e `SENHA_PRIMEIRO_ADMIN`:
+
+1. Envie o `web/instalar.php` por FTP.
+2. Abra `instalar.php` no navegador e clique em **Criar administrador**. Ele cria
+   a conta e se apaga.
+3. Entre no painel, troque a senha em **Minha conta**.
+4. Apague o valor de `SENHA_PRIMEIRO_ADMIN` no `config.php` do servidor. A senha
+   já vive ali só como hash; deixá-la em texto não serve mais para nada.
+
+O instalador tem três travas independentes: só funciona com o cadastro vazio,
+exige a senha no `config.php` e precisa de POST com token. Mesmo que fique no
+servidor por esquecimento, depois da primeira conta ele recusa sempre.
 
 ## Verificação automática
 
