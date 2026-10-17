@@ -98,7 +98,11 @@ Options -Indexes
   # outro site (frame-ancestors).
   # style 'unsafe-inline' fica liberado porque as barras dos gráficos usam
   # largura e cor calculadas no atributo style; estilo não executa código.
-  Header always set Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+  # accounts.google.com e gstatic entram só pelo botão de login do Google: ele
+  # carrega o script oficial, abre a janelinha de escolha de conta num iframe e
+  # busca as imagens do botão. Nenhum outro endereço é liberado, e o painel em
+  # si não carrega nada de fora.
+  Header always set Content-Security-Policy "default-src 'none'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https://*.googleusercontent.com https://*.gstatic.com; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 
   # HTTPS obrigatório também na memória do navegador: depois da primeira
   # visita, ele nem tenta abrir o painel por HTTP, onde poderia ser

@@ -382,7 +382,15 @@ function tokenCsrf(): string
 function csrfValido(?string $recebido): bool
 {
     iniciarSessao();
-    return hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) $recebido);
+    $esperado = (string) ($_SESSION['csrf'] ?? '');
+
+    // Sem token na sessão, nada pode ser aceito. Sem esta linha, uma sessão
+    // nova (token vazio) com um envio sem token comparava "" com "" e passava.
+    if ($esperado === '' || $recebido === null || $recebido === '') {
+        return false;
+    }
+
+    return hash_equals($esperado, $recebido);
 }
 
 // ============================================================

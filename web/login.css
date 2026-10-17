@@ -331,3 +331,16 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ===================== BOTÃO DO GOOGLE ===================== */
+
+/* O botão é desenhado pelo próprio Google dentro deste bloco. Só reservamos a
+   altura: sem isso a tela "pula" quando ele termina de carregar. */
+.area-google { min-height: 44px; }
+.area-google.carregando { opacity: 0.55; pointer-events: none; }
+
+/* O iframe do botão vem com largura fixa; aqui ele acompanha a coluna. */
+.area-google > div { max-width: 100%; }
+.area-google iframe { margin: 0 !important; }
+
+#aviso-dinamico { margin-top: 18px; margin-bottom: 0; }

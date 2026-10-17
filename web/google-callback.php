@@ -1,147 +1,134 @@
 <?php
 /**
- * Volta do Google: confere tudo, troca o codigo pelo token e decide o acesso.
+ * Recebe e confere o login do Google.
  *
- * A ordem das verificacoes importa - cada uma fecha uma porta diferente:
+ * POR QUE POST, E NÃO O REDIRECIONAMENTO CLÁSSICO
+ * O ModSecurity da HostGator devolve 406 para qualquer parâmetro cujo valor
+ * comece com https:// (regra contra inclusão remota de arquivos), e o Google
+ * devolve iss=https://accounts.google.com no retorno. Testado: acontece em GET
+ * e em POST, em PHP e até em arquivo estático; e as diretivas para desligar a
+ * regra não são permitidas no .htaccess desta hospedagem. A saída foi trocar o
+ * fluxo: o botão do Google entrega um token em base64, sem "://" em texto, que
+ * passa pelo firewall sem precisar afrouxá-lo.
  *
- *   1. state       igual ao gerado aqui        -> o login comecou neste site
- *   2. codigo      trocado com o client_secret -> so este servidor completa
- *   3. iss / aud   Google, para este cliente   -> token nao e de outro app
- *   4. exp         dentro da validade          -> token nao e antigo
- *   5. nonce       igual ao gerado aqui        -> token nao e reaproveitado
- *   6. e-mail      verificado pelo Google      -> a pessoa e dona do endereco
- *   7. cadastro    ativo na lista de usuarios  -> a pessoa tem permissao
+ * O TOKEN PASSA PELO NAVEGADOR, ENTÃO A CONFERÊNCIA É MAIS RIGOROSA
+ * No fluxo anterior o token vinha do Google direto para o servidor, por uma
+ * conexão que nós mesmos abrimos — dava para confiar na origem. Agora ele passa
+ * pela máquina da pessoa, onde poderia ser trocado. Por isso a assinatura é
+ * verificada com o Google antes de qualquer outra coisa:
  *
- * Os passos 1 a 6 provam QUEM e a pessoa. So o 7 diz se ela PODE entrar.
+ *   1. CSRF            -> o envio partiu da nossa própria tela
+ *   2. assinatura      -> conferida pelo Google (endpoint tokeninfo)
+ *   3. aud             -> token emitido para ESTE aplicativo, não outro
+ *   4. iss / exp       -> emissor correto e dentro da validade
+ *   5. nonce           -> token desta tentativa, não um reaproveitado
+ *   6. email_verified  -> a pessoa é dona do endereço
+ *   7. cadastro ativo  -> a pessoa tem permissão aqui
  *
- * Sobre a assinatura do token: ele chega aqui direto do Google, numa conexao
- * TLS que este servidor abriu e autenticou com o client_secret. A especificacao
- * do OpenID Connect (secao 3.1.3.7) dispensa validar a assinatura nesse caso,
- * porque nao ha intermediario que pudesse adultera-lo.
+ * Os passos 1 a 6 provam QUEM é. Só o 7 diz se PODE entrar.
  */
 
 declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 
-function voltarComAviso(string $aviso): void
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+/** Responde e encerra. O motivo detalhado vai para o log, nunca para a tela. */
+function responder(bool $ok, string $destinoOuAviso, ?string $log = null): never
 {
-    header('Location: login.php?aviso=' . rawurlencode($aviso));
+    if ($log !== null) {
+        error_log('Login Google: ' . $log);
+    }
+    echo json_encode($ok ? ['ok' => true, 'destino' => $destinoOuAviso]
+                         : ['ok' => false, 'aviso' => $destinoOuAviso]);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    // Alguém abriu o endereço no navegador, ou o Google ainda está configurado
+    // com o fluxo antigo de redirecionamento.
+    header('Content-Type: text/html; charset=utf-8');
+    header('Location: login.php');
     exit;
 }
 
 if (!googleConfigurado()) {
-    voltarComAviso('indisponivel');
+    responder(false, 'indisponivel');
 }
 
-// --- Etapa 1: ponte do fragmento -------------------------------------------
-// O Google volta com tudo depois do "#" (response_mode=fragment), que não chega
-// aqui. Servimos uma página mínima cujo script lê o fragmento e chama esta
-// mesma URL de novo, agora com code e state na query (e marcada com retorno=1).
-// Nada da sessão é consumido nesta etapa.
-if (!isset($_GET['retorno'])) {
-    header('Cache-Control: no-store');
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
-       . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-       . '<title>Entrando…</title></head><body>'
-       . '<noscript>Este login precisa de JavaScript ativado.</noscript>'
-       . '<script src="google-retorno.js"></script></body></html>';
-    exit;
+if (tentativasExcedidas()) {
+    responder(false, 'bloqueado');
 }
 
-// --- Etapa 2: conferência --------------------------------------------------
 iniciarSessao();
 
-$stateEsperado = (string) ($_SESSION['google_state'] ?? '');
-$nonceEsperado = (string) ($_SESSION['google_nonce'] ?? '');
-$iniciadoEm    = (int) ($_SESSION['google_em'] ?? 0);
-
-// Usados uma unica vez: some da sessao antes de qualquer outra coisa.
-unset($_SESSION['google_state'], $_SESSION['google_nonce'], $_SESSION['google_em']);
-
-if (isset($_GET['error'])) {
-    // A pessoa cancelou na tela do Google. Nao e tentativa suspeita.
-    voltarComAviso('cancelado');
+// --- 1. O envio partiu da nossa tela ---------------------------------------
+if (!csrfValido($_POST['csrf'] ?? null)) {
+    responder(false, 'expirado', 'csrf inválido');
 }
 
-$state = (string) ($_GET['state'] ?? '');
-$code  = (string) ($_GET['code'] ?? '');
-
-if ($stateEsperado === '' || !hash_equals($stateEsperado, $state) || $code === '') {
+$credencial = (string) ($_POST['credential'] ?? '');
+// Formato de JWT: três blocos base64url separados por ponto. Confere antes de
+// enviar ao Google, para não gastar requisição com lixo.
+if (!preg_match('/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/', $credencial)) {
     registrarFalha();
-    voltarComAviso('falha');
+    responder(false, 'falha', 'credencial com formato inválido');
 }
 
-if ($iniciadoEm === 0 || (time() - $iniciadoEm) > 600) {
-    voltarComAviso('expirado');
-}
+$nonceEsperado = (string) ($_SESSION['google_nonce'] ?? '');
+unset($_SESSION['google_nonce']); // vale uma vez só
 
-// --- 2. Troca o codigo pelo token, de servidor para servidor ---------------
-$ch = curl_init('https://oauth2.googleapis.com/token');
+// --- 2. Assinatura conferida pelo Google ------------------------------------
+// Usamos o endpoint oficial de verificação em vez de validar a assinatura RS256
+// por conta própria: são poucos logins por dia, e código criptográfico escrito
+// à mão é onde moram as falhas difíceis de enxergar.
+$ch = curl_init('https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($credencial));
 curl_setopt_array($ch, [
-    CURLOPT_POST           => true,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 15,
     CURLOPT_SSL_VERIFYPEER => true,
     CURLOPT_SSL_VERIFYHOST => 2,
-    CURLOPT_POSTFIELDS     => http_build_query([
-        'code'          => $code,
-        'client_id'     => GOOGLE_CLIENT_ID,
-        'client_secret' => GOOGLE_CLIENT_SECRET,
-        'redirect_uri'  => GOOGLE_REDIRECT_URI,
-        'grant_type'    => 'authorization_code',
-    ]),
 ]);
 $resposta = curl_exec($ch);
 $status   = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-$token = is_string($resposta) ? json_decode($resposta, true) : null;
-if ($status !== 200 || !is_array($token) || empty($token['id_token'])) {
-    // O detalhe vai so para o log do servidor - nunca para a tela, onde
-    // ajudaria quem esta tentando entender o fluxo para ataca-lo.
-    error_log('Login Google: troca de codigo falhou, HTTP ' . $status);
-    voltarComAviso('falha');
-}
-
-// --- 3 a 6. Confere o conteudo do token ------------------------------------
-$partes = explode('.', (string) $token['id_token']);
-if (count($partes) !== 3) {
-    voltarComAviso('falha');
-}
-
-$conteudo = json_decode(
-    (string) base64_decode(strtr($partes[1], '-_', '+/') . str_repeat('=', (4 - strlen($partes[1]) % 4) % 4)),
-    true
-);
-
-$iss = (string) ($conteudo['iss'] ?? '');
-$ok = is_array($conteudo)
-    && in_array($iss, ['https://accounts.google.com', 'accounts.google.com'], true)
-    && hash_equals(GOOGLE_CLIENT_ID, (string) ($conteudo['aud'] ?? ''))
-    && (int) ($conteudo['exp'] ?? 0) > time()
-    && $nonceEsperado !== ''
-    && hash_equals($nonceEsperado, (string) ($conteudo['nonce'] ?? ''))
-    && ($conteudo['email_verified'] ?? false) === true
-    && filter_var($conteudo['email'] ?? '', FILTER_VALIDATE_EMAIL);
-
-if (!$ok) {
+if ($status !== 200 || !is_string($resposta)) {
     registrarFalha();
-    error_log('Login Google: token recusado na conferencia de iss/aud/exp/nonce/email');
-    voltarComAviso('falha');
+    responder(false, 'falha', "tokeninfo recusou o token (HTTP $status)");
 }
 
-// --- 7. Permissao ----------------------------------------------------------
-$email = (string) $conteudo['email'];
-$nome  = trim((string) ($conteudo['name'] ?? ''));
+$t = json_decode($resposta, true);
+if (!is_array($t)) {
+    responder(false, 'falha', 'resposta do tokeninfo ilegível');
+}
 
-$acesso = registrarAcessoGoogle($email, $nome);
+// --- 3 a 6. Conteúdo do token ----------------------------------------------
+$emailVerificado = ($t['email_verified'] ?? '') === true || ($t['email_verified'] ?? '') === 'true';
+
+$conferencias = [
+    'aud'   => hash_equals(GOOGLE_CLIENT_ID, (string) ($t['aud'] ?? '')),
+    'iss'   => in_array((string) ($t['iss'] ?? ''), ['https://accounts.google.com', 'accounts.google.com'], true),
+    'exp'   => (int) ($t['exp'] ?? 0) > time(),
+    'nonce' => $nonceEsperado !== '' && hash_equals($nonceEsperado, (string) ($t['nonce'] ?? '')),
+    'email' => $emailVerificado && filter_var($t['email'] ?? '', FILTER_VALIDATE_EMAIL) !== false,
+];
+
+$falhou = array_keys(array_filter($conferencias, static fn ($v) => !$v));
+if ($falhou !== []) {
+    registrarFalha();
+    responder(false, 'falha', 'token recusado em: ' . implode(', ', $falhou));
+}
+
+// --- 7. Permissão -----------------------------------------------------------
+$acesso = registrarAcessoGoogle((string) $t['email'], trim((string) ($t['name'] ?? '')));
 
 if ($acesso['resultado'] !== 'ativo') {
-    voltarComAviso('pendente');
+    // Pendente e bloqueado recebem a mesma resposta, de propósito.
+    responder(false, 'pendente');
 }
 
 limparFalhas();
-abrirSessao($email, 'google');
-header('Location: index.php');
-exit;
+abrirSessao((string) $t['email'], 'google');
+responder(true, 'index.php');
