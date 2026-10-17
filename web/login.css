@@ -70,10 +70,16 @@ body {
   overflow: hidden;
   color: var(--branco);
   background: linear-gradient(180deg, var(--vermelho) 0%, var(--vermelho-escuro) 100%);
+  /* Logo e frase formam um bloco só, centralizado e alinhado pelo mesmo eixo.
+     O respiro maior embaixo sobe o bloco um pouco acima do meio: no centro
+     exato ele parece "caído", por causa da casa grande no canto inferior. */
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 52px 56px 64px;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  text-align: center;
+  padding: 52px 56px 14vh;
 }
 
 .marca::after {
@@ -105,11 +111,11 @@ body {
 /* A logo pousa direto sobre o vermelho: só os traços brancos, sem a caixa. */
 .logo {
   display: block;
-  width: 112px;
+  width: 124px;
   height: auto;
 }
 
-.marca-texto { max-width: 30rem; }
+.marca-texto { max-width: 26rem; }
 
 .marca h1 {
   font-size: clamp(2rem, 3.3vw, 2.85rem);
